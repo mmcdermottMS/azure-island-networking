@@ -85,6 +85,10 @@ var functionApps = [
         value: ''
       }
       {
+        name: 'CosmosInitialAutoscaleThroughput'
+        value: '20000'
+      }
+      {
         name: 'EhNameSpace'
         value: '${resourcePrefix}-ehns.servicebus.windows.net'
       }
@@ -132,6 +136,15 @@ module keyVault 'Modules/keyVault.bicep' = {
     tenantId: tenantId
     timeStamp: timeStamp
     vnetName: workloadVnetName
+  }
+}
+
+module vmPasswordSecret 'modules/keyVaultSecrent.bicep'  = {
+  name: '${timeStamp}-${resourcePrefix}-kvSecret'
+  params: {
+    parentKeyVaultName: keyVault.outputs.name
+    secretName: 'vmPassword'
+    secretValue: 'TODO'
   }
 }
 

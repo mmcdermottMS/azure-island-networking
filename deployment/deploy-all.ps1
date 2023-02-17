@@ -91,7 +91,6 @@ $kvName = "$appName-$regionCode-kv"
 $acrPullIdentityName = "$appName-$regionCode-mi-acrPull"
 $kvSecretsUserIdentityName = "$appName-$regionCode-mi-kvSecrets"
 
-
 # See if we already have our custom CosmosDB role defition.  This will be used for managed identity access
 $cosmosRoleId = ''
 (az cosmosdb sql role definition list --resource-group $targetResourceGroup --account-name $cosmosAccountName) | ConvertFrom-Json | ForEach-Object {

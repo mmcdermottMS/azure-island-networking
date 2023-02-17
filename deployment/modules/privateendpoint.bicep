@@ -34,10 +34,8 @@ resource privateEndpoint 'Microsoft.Network/privateEndpoints@2020-06-01' = {
 }
 
 resource privateDnsZoneConfig 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2020-06-01' = {
-  name: '${privateEndpointName}/dnsgroupname'
-  dependsOn: [
-    privateEndpoint
-  ]
+  parent: privateEndpoint
+  name: 'dnsgroupname'
   properties: {
     privateDnsZoneConfigs: [
       {

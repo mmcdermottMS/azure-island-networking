@@ -3,6 +3,7 @@ param location string
 param networkResourceGroupName string
 param dnsResourceGroupName string
 param resourcePrefix string
+param tags object
 param tenantId string
 param timeStamp string
 param vnetName string
@@ -24,6 +25,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' = {
       defaultAction: 'Deny'
     }
   }
+  tags: tags
 }
 
 module privateEndpoint 'privateendpoint.bicep' = {
@@ -41,3 +43,5 @@ module privateEndpoint 'privateendpoint.bicep' = {
     groupId: 'vault'
   }
 }
+
+output name string = keyVault.name
