@@ -133,6 +133,7 @@ module keyVault 'Modules/keyVault.bicep' = {
     networkResourceGroupName: networkResourceGroupName
     dnsResourceGroupName: dnsResourceGroupName
     resourcePrefix: resourcePrefix
+    tags: tags
     tenantId: tenantId
     timeStamp: timeStamp
     vnetName: workloadVnetName
