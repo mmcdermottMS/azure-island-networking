@@ -1,10 +1,11 @@
 param location string
-param resourcePrefix string
-param role string
+param name string
 param tags object
 
 resource mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: '${resourcePrefix}-mi-${role}'
+  name: name
   location: location
   tags: tags
 }
+
+output principalId string = mi.properties.principalId

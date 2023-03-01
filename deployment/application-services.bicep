@@ -4,7 +4,7 @@ param appPrefix string
 param regionCode string
 param location string = resourceGroup().location
 param storageSkuName string = 'Standard_LRS'
-param tags object = { }
+param tags object = {}
 param zoneRedundant bool = false
 @maxLength(16)
 @description('The full prefix is the combination of the org prefix and app prefix and cannot exceed 16 characters in order to avoid deployment failures with certain PaaS resources such as storage or key vault')
@@ -14,6 +14,7 @@ var resourcePrefix = '${fullPrefix}-${regionCode}'
 var workloadVnetName = '${resourcePrefix}-workload'
 var tenantId = subscription().tenantId
 var networkResourceGroupName = '${fullPrefix}-network'
+var workloadResourceGroupName = '${fullPrefix}-workload'
 var dnsResourceGroupName = '${fullPrefix}-dns'
 
 //NOTE: This is set to false for ease of testing and rapid iteration on changes.  For real workloads this should be set to true
@@ -104,19 +105,59 @@ var functionApps = [
   }
 ]
 
-/*
-// TODO - Refactor to parameterize vnet name
-// TODO - This is all jacked up around managed identities
+
+
+
+
+
+var managedIdentityName = '${resourcePrefix}-mi-network-contributor'
+
+module networkContributorMi 'modules/managedIdentity.bicep' = {
+  name: '${timeStamp}-mi-network-contributor'
+  scope: resourceGroup(workloadResourceGroupName)
+  params: {
+    location: location
+    name: managedIdentityName
+    tags: tags
+  }
+}
+
+module networkRoleAssignment 'modules/roleAssignment.bicep' = {
+  name: '${timeStamp}-network-contributor-role-assignment'
+  scope: resourceGroup(networkResourceGroupName)
+  params: {
+    principalId: networkContributorMi.outputs.principalId
+  }
+}
+
 module aks 'modules/aks.bicep' = {
   name: '${timeStamp}-${resourcePrefix}-aks'
   params: {
     location: location
+    managedIdentityName: managedIdentityName
     resourcePrefix: resourcePrefix
-    subnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${orgPrefix}-network/providers/Microsoft.Network/virtualNetworks/${appPrefix}-vnet/subnets/aks'
+    subnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${fullPrefix}-network/providers/Microsoft.Network/virtualNetworks/${resourcePrefix}-workload/subnets/aks'
   }
+  dependsOn: [
+    networkContributorMi
+    networkRoleAssignment
+  ]
 }
-*/
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
 module monitoring 'Modules/monitoring.bicep' = {
   name: '${timeStamp}-${resourcePrefix}-monitoring'
   params: {
@@ -256,3 +297,4 @@ module privateEndpoint 'modules/privateendpoint.bicep' = {
   ]
 }
 
+*/

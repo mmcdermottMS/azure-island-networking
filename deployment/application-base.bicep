@@ -70,7 +70,6 @@ resource bridgeAzFw 'Microsoft.Network/azureFirewalls@2022-05-01' existing = {
 }
 
 // ISLAND VNET IP SETTINGS
-/*
 param islandVnetAddressSpace string = '192.168.0.0/18'
 param aksSubnetAddressPrefix string = '192.168.0.0/22'          // 1019 addresses - 192.168.0.0 - 192.168.4.0
 param utilSubnetAddressPrefix string = '192.168.4.0/22'         // 1019 addresses - 192.168.4.0 - 192.168.8.0
@@ -78,8 +77,8 @@ param privateEndpointAddressPrefix string = '192.168.8.0/24'    // 251  addresse
 param ehProducerFaAddressPrefix string = '192.168.9.0/26'       // 61   addresses - 192.168.9.0 - 192.168.9.63
 param ehConsumerFaAddressPrefix string = '192.168.9.64/26'      // 61   addresses - 192.168.9.64 - 192.168.9.127
 param sbConsumerFaAddressPrefix string = '192.168.9.128/26'     // 61   addresses - 192.168.9.128 - 192.168.9.192
-*/
 
+/*
 param islandVnetAddressSpace string = '192.168.64.0/18'
 param aksSubnetAddressPrefix string = '192.168.64.0/22'          // 1019 addresses - 192.168.0.0 - 192.168.4.0
 param utilSubnetAddressPrefix string = '192.168.68.0/22'         // 1019 addresses - 192.168.4.0 - 192.168.8.0
@@ -87,7 +86,7 @@ param privateEndpointAddressPrefix string = '192.168.72.0/24'    // 251  address
 param ehProducerFaAddressPrefix string = '192.168.73.0/26'       // 61   addresses - 192.168.9.0 - 192.168.9.63
 param ehConsumerFaAddressPrefix string = '192.168.73.64/26'      // 61   addresses - 192.168.9.64 - 192.168.9.127
 param sbConsumerFaAddressPrefix string = '192.168.73.128/26'     // 61   addresses - 192.168.9.128 - 192.168.9.192
-
+*/
 
 module vnet 'modules/vnet.bicep' = {
   name: '${timeStamp}-${resourcePrefix}-vnet'

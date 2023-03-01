@@ -1,11 +1,11 @@
-param resourcePrefix string
-param location string
 param linuxAdminUsername string = 'adminUser'
+param location string
+param managedIdentityName string
+param resourcePrefix string
 param subnetId string
 
-resource mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'aksMi'
-  location: location
+resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
+  name: managedIdentityName
 }
 
 resource aks 'Microsoft.ContainerService/managedClusters@2022-07-01' = {
@@ -13,13 +13,13 @@ resource aks 'Microsoft.ContainerService/managedClusters@2022-07-01' = {
   location: location
   identity: {
     type: 'UserAssigned'
-    userAssignedIdentities: mi
+    userAssignedIdentities: managedIdentity
   }
   properties: {
     dnsPrefix: '${resourcePrefix}-aks-dns'
     agentPoolProfiles: [
       {
-        name: 'agentpool'
+        name: 'agentpool1'
         count: 1
         vmSize: 'Standard_B4ms'
         osDiskSizeGB: 128
@@ -31,6 +31,7 @@ resource aks 'Microsoft.ContainerService/managedClusters@2022-07-01' = {
         enableNodePublicIP: false
         mode: 'System'       
         osType: 'Linux'
+        osSKU: 'Ubuntu'
       }
     ]
     nodeResourceGroup: '${resourcePrefix}-aks-node'
@@ -44,5 +45,9 @@ resource aks 'Microsoft.ContainerService/managedClusters@2022-07-01' = {
         ]
       }
     }
+  }
+  sku: {
+    name: 'Basic'
+    tier: 'Free'
   }
 }
