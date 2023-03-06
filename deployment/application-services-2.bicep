@@ -12,23 +12,21 @@ var resourcePrefix = '${fullPrefix}-${regionCode}'
 var workloadVnetName = '${resourcePrefix}-workload'
 var tenantId = subscription().tenantId
 var networkResourceGroupName = '${fullPrefix}-network'
+var workloadResourceGroupName = '${fullPrefix}-workload'
 var dnsResourceGroupName = '${fullPrefix}-dns'
+var acrPullMiName = '${resourcePrefix}-mi-acrPull'
+var keyVaultUserMiName = '${resourcePrefix}-mi-kvSecretsUser'
+var networkContributorMiName = '${resourcePrefix}-mi-network-contributor'
+
+
+//az aks get-credentials --resource-group mrm-workload2-workload --name mrm-workload2-cus-aks
+//kubectl apply -f aks-manifest.yaml
+//kubectl get service mrm-weather --watch
+
+
 
 //NOTE: This is set to false for ease of testing and rapid iteration on changes.  For real workloads this should be set to true
 var enableSoftDeleteForKeyVault = false
-
-/*
-// TODO - Refactor to parameterize vnet name
-// TODO - This is all jacked up around managed identities
-module aks 'modules/aks.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-aks'
-  params: {
-    location: location
-    resourcePrefix: resourcePrefix
-    subnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${orgPrefix}-network/providers/Microsoft.Network/virtualNetworks/${appPrefix}-vnet/subnets/aks'
-  }
-}
-*/
 
 module monitoring 'Modules/monitoring.bicep' = {
   name: '${timeStamp}-${resourcePrefix}-monitoring'
@@ -42,6 +40,7 @@ module keyVault 'Modules/keyVault.bicep' = {
   name: '${timeStamp}-${resourcePrefix}-kv'
   params: {
     enableSoftDelete: enableSoftDeleteForKeyVault
+    keyVaultUserMiName: keyVaultUserMiName
     location: location
     networkResourceGroupName: networkResourceGroupName
     dnsResourceGroupName: dnsResourceGroupName
@@ -65,11 +64,47 @@ module vmPasswordSecret 'modules/keyVaultSecrent.bicep' = {
 module containerRegistry 'Modules/containerRegistry.bicep' = {
   name: '${timeStamp}-${resourcePrefix}-acr'
   params: {
+    acrPullMiName: acrPullMiName
     location: location
     networkResourceGroupName: networkResourceGroupName
     dnsResourceGroupName: dnsResourceGroupName
     resourcePrefix: resourcePrefix
+    tags: tags
     timeStamp: timeStamp
     vnetName: workloadVnetName
   }
+}
+
+module networkContributorMi 'modules/managedIdentity.bicep' = {
+  name: '${timeStamp}-mi-networkContributor'
+  scope: resourceGroup(workloadResourceGroupName)
+  params: {
+    location: location
+    name: networkContributorMiName
+    tags: tags
+  }
+}
+
+module networkRoleAssignment 'modules/roleAssignment.bicep' = {
+  name: '${timeStamp}-network-contributor-role-assignment'
+  scope: resourceGroup(networkResourceGroupName)
+  params: {
+    principalId: networkContributorMi.outputs.principalId
+  }
+}
+
+module aks 'modules/aks.bicep' = {
+  name: '${timeStamp}-${resourcePrefix}-aks'
+  params: {
+    location: location
+    networkContributorMiName: networkContributorMiName
+    privateLinkServiceIp: '192.168.64.4' //TODO: migrate this to the parameters file
+    resourcePrefix: resourcePrefix
+    subnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${fullPrefix}-network/providers/Microsoft.Network/virtualNetworks/${resourcePrefix}-workload/subnets/aks'
+    tags: tags
+  }
+  dependsOn: [
+    networkContributorMi
+    networkRoleAssignment
+  ]
 }
