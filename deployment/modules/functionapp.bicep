@@ -1,7 +1,9 @@
+param acrPullMiName string
 param dockerImageAndTag string
 param functionAppNameSuffix string
 param functionSpecificAppSettings array
 param functionSubnetId string
+param keyVaultUserMiName string
 param location string
 param networkResourceGroupName string
 param dnsResourceGroupName string
@@ -31,7 +33,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-08-01' existing 
 var storageConnString = 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${listKeys(storageAccount.id, storageAccount.apiVersion).keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
 
 module asp 'appServicePlan.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-${functionAppNameSuffix}-asp'
+  name: '${timeStamp}-${functionAppNameSuffix}-asp'
   params: {
     location: location
     resourcePrefix: resourcePrefix
@@ -90,10 +92,27 @@ var baseAppSettings = [
   }
 ]
 
+resource acrPullMi 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
+  name: acrPullMiName
+}
+
+resource keyVaultSecretsUserMi 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
+  name: keyVaultUserMiName
+}
+
 resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp,linux,container'
+  identity: {
+    type: 'SystemAssigned, UserAssigned'
+    userAssignedIdentities: {
+      '${acrPullMi.id}': {
+      }
+      '${keyVaultSecretsUserMi.id}': {
+      }
+    }
+  }
   properties: {
     serverFarmId: asp.outputs.resourceId
     httpsOnly: true
@@ -129,7 +148,7 @@ module privateEndpoint 'privateendpoint.bicep' = {
 // deployment of the storage account with networking open, then deploy the function app, then redeploy the same
 // storage account with networking locked down
 module networkLockedStorage 'storage.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-${functionAppNameSuffix}-lockedStorage'
+  name: '${timeStamp}-${functionAppNameSuffix}-lockedStorage'
   params: {
     defaultAction: 'Deny'
     location: location

@@ -14,8 +14,9 @@ var resourcePrefix = '${fullPrefix}-${regionCode}'
 var workloadVnetName = '${resourcePrefix}-workload'
 var tenantId = subscription().tenantId
 var networkResourceGroupName = '${fullPrefix}-network'
-var workloadResourceGroupName = '${fullPrefix}-workload'
 var dnsResourceGroupName = '${fullPrefix}-dns'
+var acrPullMiName = '${resourcePrefix}-mi-acrPull'
+var keyVaultUserMiName = '${resourcePrefix}-mi-kvSecretsUser'
 
 //NOTE: This is set to false for ease of testing and rapid iteration on changes.  For real workloads this should be set to true
 var enableSoftDeleteForKeyVault = false
@@ -105,71 +106,25 @@ var functionApps = [
   }
 ]
 
-
-
-
-
-
-var managedIdentityName = '${resourcePrefix}-mi-network-contributor'
-
-module networkContributorMi 'modules/managedIdentity.bicep' = {
-  name: '${timeStamp}-mi-network-contributor'
-  scope: resourceGroup(workloadResourceGroupName)
+module containerRegistry 'Modules/containerRegistry.bicep' = {
+  name: '${timeStamp}-acr'
   params: {
+    acrPullMiName: acrPullMiName
     location: location
-    name: managedIdentityName
+    networkResourceGroupName: networkResourceGroupName
+    dnsResourceGroupName: dnsResourceGroupName
+    resourcePrefix: resourcePrefix
     tags: tags
-  }
-}
-
-module networkRoleAssignment 'modules/roleAssignment.bicep' = {
-  name: '${timeStamp}-network-contributor-role-assignment'
-  scope: resourceGroup(networkResourceGroupName)
-  params: {
-    principalId: networkContributorMi.outputs.principalId
-  }
-}
-
-module aks 'modules/aks.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-aks'
-  params: {
-    location: location
-    managedIdentityName: managedIdentityName
-    resourcePrefix: resourcePrefix
-    subnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${fullPrefix}-network/providers/Microsoft.Network/virtualNetworks/${resourcePrefix}-workload/subnets/aks'
-  }
-  dependsOn: [
-    networkContributorMi
-    networkRoleAssignment
-  ]
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-module monitoring 'Modules/monitoring.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-monitoring'
-  params: {
-    location: location
-    resourcePrefix: resourcePrefix
+    timeStamp: timeStamp
+    vnetName: workloadVnetName
   }
 }
 
 module keyVault 'Modules/keyVault.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-kv'
+  name: '${timeStamp}-kv'
   params: {
     enableSoftDelete: enableSoftDeleteForKeyVault
+    keyVaultUserMiName: keyVaultUserMiName
     location: location
     networkResourceGroupName: networkResourceGroupName
     dnsResourceGroupName: dnsResourceGroupName
@@ -182,7 +137,7 @@ module keyVault 'Modules/keyVault.bicep' = {
 }
 
 module vmPasswordSecret 'modules/keyVaultSecrent.bicep'  = {
-  name: '${timeStamp}-${resourcePrefix}-kvSecret'
+  name: '${timeStamp}-kvSecret-vmPassword'
   params: {
     parentKeyVaultName: keyVault.outputs.name
     secretName: 'vmPassword'
@@ -190,8 +145,16 @@ module vmPasswordSecret 'modules/keyVaultSecrent.bicep'  = {
   }
 }
 
+module monitoring 'Modules/monitoring.bicep' = {
+  name: '${timeStamp}-monitoring'
+  params: {
+    location: location
+    resourcePrefix: resourcePrefix
+  }
+}
+
 module eventHub 'Modules/eventHub.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-eventHub'
+  name: '${timeStamp}-eventHub'
   params: {
     eventHubNames: entities
     location: location
@@ -205,7 +168,7 @@ module eventHub 'Modules/eventHub.bicep' = {
 }
 
 module serviceBus 'Modules/serviceBus.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-serviceBus'
+  name: '${timeStamp}-serviceBus'
   params: {
     location: location
     networkResourceGroupName: networkResourceGroupName
@@ -218,20 +181,8 @@ module serviceBus 'Modules/serviceBus.bicep' = {
   }
 }
 
-module containerRegistry 'Modules/containerRegistry.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-acr'
-  params: {
-    location: location
-    networkResourceGroupName: networkResourceGroupName
-    dnsResourceGroupName: dnsResourceGroupName
-    resourcePrefix: resourcePrefix
-    timeStamp: timeStamp
-    vnetName: workloadVnetName
-  }
-}
-
 module cosmos 'Modules/cosmos.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-cosmos'
+  name: '${timeStamp}-cosmos'
   params: {
     location: location
     networkResourceGroupName: networkResourceGroupName
@@ -244,7 +195,7 @@ module cosmos 'Modules/cosmos.bicep' = {
 
 var functionAppsCount = length(functionApps)
 module storage 'Modules/storage.bicep' = [for i in range(0, functionAppsCount): {
-  name: '${timeStamp}-${resourcePrefix}-${functionApps[i].functionAppNameSuffix}-storage'
+  name: '${timeStamp}-${functionApps[i].functionAppNameSuffix}-storage'
   params: {
     defaultAction: 'Allow'
     location: location
@@ -255,12 +206,14 @@ module storage 'Modules/storage.bicep' = [for i in range(0, functionAppsCount): 
 }]
 
 module functions 'Modules/functionapp.bicep' = [for i in range(0, functionAppsCount): {
-  name: '${timeStamp}-${resourcePrefix}-${functionApps[i].functionAppNameSuffix}'
+  name: '${timeStamp}-${functionApps[i].functionAppNameSuffix}-fa'
   params: {
+    acrPullMiName: acrPullMiName
     dockerImageAndTag: functionApps[i].dockerImageAndTag
     functionAppNameSuffix: functionApps[i].functionAppNameSuffix
     functionSpecificAppSettings: functionApps[i].appSettings
     functionSubnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${networkResourceGroupName}/providers/Microsoft.Network/virtualNetworks/${workloadVnetName}/subnets/${functionApps[i].functionAppNameSuffix}'
+    keyVaultUserMiName: keyVaultUserMiName
     location: location
     networkResourceGroupName: networkResourceGroupName
     dnsResourceGroupName: dnsResourceGroupName
@@ -279,7 +232,7 @@ module functions 'Modules/functionapp.bicep' = [for i in range(0, functionAppsCo
 
 //Hard coded private endpoint for the EH Producer FA into the Hub VNET
 module privateEndpoint 'modules/privateendpoint.bicep' = {
-  name: 'workload-functionApp-privateEndpoint'
+  name: '${timeStamp}-workload-functionApp-privateEndpoint'
   scope: resourceGroup('${orgPrefix}-core-network')
   params: {
     location: location
@@ -296,5 +249,3 @@ module privateEndpoint 'modules/privateendpoint.bicep' = {
     functions
   ]
 }
-
-*/

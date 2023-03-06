@@ -94,6 +94,7 @@ if ([string]::IsNullOrWhiteSpace($cosmosRoleId)) {
     DecoratedOutput "Custom Cosmos Read/Write Role already exists"
 }
 
+<#
 # Create a user defined managed identity and assign the AcrPull role to it.  This identity will then be added to all the function apps so they can access the container registry via managed identity
 $acrPullPrincipalId = (az identity create --name $acrPullIdentityName --resource-group $targetResourceGroup --location $location --query principalId --output tsv)
 $acrPullRoleId = (az role definition list --name "AcrPull" --query [0].id --output tsv)
@@ -107,6 +108,7 @@ $keyVaultSecretsRoleId = (az role definition list --name "Key Vault Secrets User
 DecoratedOutput "Got Key Vault Secrets User Role Id:" $keyVaultSecretsRoleId
 $kvSecretRoleAssignment_output = (az role assignment create --assignee $kvSecretsPrincipalId --role $keyVaultSecretsRoleId --scope "/subscriptions/$subscriptionId/resourcegroups/$targetResourceGroup/providers/Microsoft.KeyVault/vaults/$kvName" --output tsv)
 DecoratedOutput "Completed role assignment of Key Vault Secrets User to User Identity"
+#>
 
 # Wire up ACR to AKS - TODO: UNCOMMENT THIS ONCE AKS IS PROVISIONED
 #$aksUpdate_output = az aks update -n $aksName -g $targetResourceGroup --attach-acr $containerRegistryName
@@ -124,6 +126,7 @@ $functionApps | ForEach-Object {
         $storageAccountName = $storageAccountName.Substring(0, 24)
     }
 
+    <#
     # Add the AcrPull managed identity to the function app
     $appIdentityAssignOutput = (az functionapp identity assign --resource-group $targetResourceGroup --name "$appName-$regionCode-$functionAppNameSuffix" --identities "/subscriptions/$subscriptionId/resourcegroups/$targetResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$acrPullIdentityName"  --query principalId --output tsv)
     DecoratedOutput "Added AcrPull MI to Function App" $functionAppNameSuffix
@@ -131,6 +134,7 @@ $functionApps | ForEach-Object {
     # Add the Key Vault managed identity to the function app
     $appIdentityAssignOutput = (az functionapp identity assign --resource-group $targetResourceGroup --name "$appName-$regionCode-$functionAppNameSuffix" --identities "/subscriptions/$subscriptionId/resourcegroups/$targetResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$kvSecretsUserIdentityName"  --query principalId --output tsv)
     DecoratedOutput "Added Key Vault Secrets User MI to Function App" $functionAppNameSuffix
+    #>
 
     # Create a system managed identity for the function app.  This will be used to access storage accounts, event hubs, and service bus via managed identity
     $functionAppIdentityId = (az functionapp identity assign --resource-group $targetResourceGroup --name "$appName-$regionCode-$functionAppNameSuffix" --query principalId --output tsv)

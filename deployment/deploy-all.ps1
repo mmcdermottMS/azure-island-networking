@@ -18,9 +18,16 @@ Function DecoratedOutput {
 $timeStamp = Get-Date -Format "yyyyMMddHHmm"
 $location = $Args[0]
 $orgPrefix = $Args[1]
-$appPrefix = $Args[2]
-$subscriptionId = $Args[3]
-$targetResourceGroup = "$orgPrefix-$appPrefix-workload"
+$firstAppPrefix = $Args[2]
+$secondAppPrefix = $Args[3]
+$subscriptionId = $Args[4]
+
+if($Args.Length -lt 5) {
+    Write-Warning "Usage: deploy-all.ps1 {location} {orgPrefix} {firstWorkloadPrefix} {secondWorkloadPrefix} {subscriptionId}"
+    exit
+}
+
+$targetResourceGroup = "$orgPrefix-$firstAppPrefix-workload"
 
 switch ($location) {
     'eastus' {
@@ -54,16 +61,16 @@ DecoratedOutput "Deploying Core..."
 $core_output = az deployment sub create --name "$timeStamp-core" --location $location --template-file core.bicep --parameters core.params.json region=$location orgPrefix=$orgPrefix appPrefix='core' regionCode=$regionCode
 DecoratedOutput "Core Deployed."
 
-DecoratedOutput "Deploying App Base..."
-$appbase_output = az deployment sub create --name "$timeStamp-appbase" --location $location --template-file application-base.bicep --parameters application-base.params.json region=$location orgPrefix=$orgPrefix appPrefix=$appPrefix regionCode=$regionCode corePrefix='core'
-DecoratedOutput "App Base Deployed."
+DecoratedOutput "Deploying App Base for First Workload..."
+$appbase_output = az deployment sub create --name "$timeStamp-appbase" --location $location --template-file application-base.bicep --parameters application-base.params.json region=$location orgPrefix=$orgPrefix appPrefix=$firstAppPrefix regionCode=$regionCode corePrefix='core'
+DecoratedOutput "App Base for First Workload Deployed."
 
 DecoratedOutput "Setting Target Resource Group to" $targetResourceGroup
 $defaultGroup_output = az configure --defaults group="$targetResourceGroup"
 
-DecoratedOutput "Deploying App Services..."
-$appsvc_output = az deployment group create --name "$timeStamp-appsvc" --template-file application-services.bicep --parameters application-services.params.json orgPrefix=$orgPrefix appPrefix=$appPrefix regionCode=$regionCode
-DecoratedOutput "App Services Deployed."
+DecoratedOutput "Deploying First Workload..."
+$appsvc_output = az deployment group create --name "$timeStamp-appsvc" --template-file application-services.bicep --parameters application-services.params.json orgPrefix=$orgPrefix appPrefix=$firstAppPrefix regionCode=$regionCode
+DecoratedOutput "First Workload Deployed."
 
 $functionApps = @(
     [PSCustomObject]@{
@@ -81,15 +88,10 @@ $functionApps = @(
 )
 
 # Define variables for configuration and managed identity assignment
-$appName = "$orgPrefix-$appPrefix"
+$appName = "$orgPrefix-$firstAppPrefix"
 $serviceBusName = "$appName-$regionCode-sbns"
 $eventHubName = "$appName-$regionCode-ehns"
 $cosmosAccountName = "$appName-$regionCode-acdb"
-$aksName = "$appName-$regionCode-aks"
-$containerRegistryName = $appName.ToString().ToLower().Replace("-", "") + "$regionCode" + "acr"
-$kvName = "$appName-$regionCode-kv"
-$acrPullIdentityName = "$appName-$regionCode-mi-acrPull"
-$kvSecretsUserIdentityName = "$appName-$regionCode-mi-kvSecrets"
 
 # See if we already have our custom CosmosDB role defition.  This will be used for managed identity access
 $cosmosRoleId = ''
@@ -108,24 +110,7 @@ if ([string]::IsNullOrWhiteSpace($cosmosRoleId)) {
     DecoratedOutput "Custom Cosmos Read/Write Role already exists"
 }
 
-# Create a user defined managed identity and assign the AcrPull role to it.  This identity will then be added to all the function apps so they can access the container registry via managed identity
-$acrPullPrincipalId = (az identity create --name $acrPullIdentityName --resource-group $targetResourceGroup --location $location --query principalId --output tsv)
-$acrPullRoleId = (az role definition list --name "AcrPull" --query [0].id --output tsv)
-DecoratedOutput "Got AcrPull Role Id:" $acrPullRoleId
-$acrPullRoleAssignment_output = (az role assignment create --assignee $acrPullPrincipalId --role $acrPullRoleId --scope "/subscriptions/$subscriptionId/resourcegroups/$targetResourceGroup/providers/Microsoft.ContainerRegistry/registries/$containerRegistryName" --output tsv)
-DecoratedOutput "Completed role assignment of acrPull to User Identity"
-
-# Create a user defined managed identity and assign the Key Vault Secrets User role to it.  This identity will then be added to all the function apps so they can access Key Vault via managed identity
-$kvSecretsPrincipalId = (az identity create --name $kvSecretsUserIdentityName --resource-group $targetResourceGroup --location $location --query principalId --output tsv)
-$keyVaultSecretsRoleId = (az role definition list --name "Key Vault Secrets User" --query [0].id --output tsv)
-DecoratedOutput "Got Key Vault Secrets User Role Id:" $keyVaultSecretsRoleId
-$kvSecretRoleAssignment_output = (az role assignment create --assignee $kvSecretsPrincipalId --role $keyVaultSecretsRoleId --scope "/subscriptions/$subscriptionId/resourcegroups/$targetResourceGroup/providers/Microsoft.KeyVault/vaults/$kvName" --output tsv)
-DecoratedOutput "Completed role assignment of Key Vault Secrets User to User Identity"
-
-# Wire up ACR to AKS - TODO: UNCOMMENT THIS ONCE AKS IS PROVISIONED
-#$aksUpdate_output = az aks update -n $aksName -g $targetResourceGroup --attach-acr $containerRegistryName
-#DecoratedOutput "Wired up AKS to ACR"
-
+<#
 # For each of the function apps we created...
 $functionApps | ForEach-Object {
     $functionAppNameSuffix = $_.AppNameSuffix
@@ -137,14 +122,6 @@ $functionApps | ForEach-Object {
     if ($storageAccountName.Length -gt 24) {
         $storageAccountName = $storageAccountName.Substring(0, 24)
     }
-
-    # Add the AcrPull managed identity to the function app
-    $appIdentityAssignOutput = (az functionapp identity assign --resource-group $targetResourceGroup --name "$appName-$regionCode-$functionAppNameSuffix" --identities "/subscriptions/$subscriptionId/resourcegroups/$targetResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$acrPullIdentityName"  --query principalId --output tsv)
-    DecoratedOutput "Added AcrPull MI to Function App" $functionAppNameSuffix
-
-    # Add the Key Vault managed identity to the function app
-    $appIdentityAssignOutput = (az functionapp identity assign --resource-group $targetResourceGroup --name "$appName-$regionCode-$functionAppNameSuffix" --identities "/subscriptions/$subscriptionId/resourcegroups/$targetResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$kvSecretsUserIdentityName"  --query principalId --output tsv)
-    DecoratedOutput "Added Key Vault Secrets User MI to Function App" $functionAppNameSuffix
 
     # Create a system managed identity for the function app.  This will be used to access storage accounts, event hubs, and service bus via managed identity
     $functionAppIdentityId = (az functionapp identity assign --resource-group $targetResourceGroup --name "$appName-$regionCode-$functionAppNameSuffix" --query principalId --output tsv)
@@ -182,3 +159,25 @@ $functionApps | ForEach-Object {
     $cosmosRoleAssiment_output = az cosmosdb sql role assignment create --account-name $cosmosAccountName --resource-group $targetResourceGroup --scope "/" --principal-id $functionAppIdentityId --role-definition-id $cosmosRoleId
     DecoratedOutput "Assigned Custom Cosmos Role to" $functionAppNameSuffix
 }
+#>
+
+$appName = "$orgPrefix-$secondAppPrefix"
+$aksName = "$appName-$regionCode-aks"
+$containerRegistryName = $appName.ToString().ToLower().Replace("-", "") + "$regionCode" + "acr"
+
+DecoratedOutput "Deploying App Base for Second Workload..."
+$appbase_output = az deployment sub create --name "$timeStamp-appbase" --location $location --template-file application-base-2.bicep --parameters application-base.params.json region=$location orgPrefix=$orgPrefix appPrefix=$secondAppPrefix regionCode=$regionCode corePrefix='core'
+DecoratedOutput "App Base for Second Workload Deployed."
+
+$targetResourceGroup = "$orgPrefix-$secondAppPrefix-workload"
+DecoratedOutput "Setting Target Resource Group to" $targetResourceGroup
+$defaultGroup_output = az configure --defaults group="$targetResourceGroup"
+
+DecoratedOutput "Deploying Second Workload..."
+$appsvc_output = az deployment group create --name "$timeStamp-appsvc" --template-file application-services-2.bicep --parameters application-services.params.json orgPrefix=$orgPrefix appPrefix=$secondAppPrefix regionCode=$regionCode
+DecoratedOutput "Second Workload Deployed."
+
+# Wire up ACR to AKS
+$aksUpdate_output = az aks update -n $aksName -g $targetResourceGroup --attach-acr $containerRegistryName
+DecoratedOutput "Wired up AKS to ACR"
+#>

@@ -1,11 +1,15 @@
+//param acrPullMiName string
+//param keyVaultUserMiName string
 param linuxAdminUsername string = 'adminUser'
 param location string
-param managedIdentityName string
+param networkContributorMiName string
+param privateLinkServiceIp string
 param resourcePrefix string
 param subnetId string
+param tags object
 
-resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
-  name: managedIdentityName
+resource networkContributorMi 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
+  name: networkContributorMiName
 }
 
 resource aks 'Microsoft.ContainerService/managedClusters@2022-07-01' = {
@@ -13,23 +17,23 @@ resource aks 'Microsoft.ContainerService/managedClusters@2022-07-01' = {
   location: location
   identity: {
     type: 'UserAssigned'
-    userAssignedIdentities: managedIdentity
+    userAssignedIdentities: {
+      '${networkContributorMi.id}': {
+      }
+    }
   }
   properties: {
     dnsPrefix: '${resourcePrefix}-aks-dns'
     agentPoolProfiles: [
       {
         name: 'agentpool1'
-        count: 1
+        count: 2
         vmSize: 'Standard_B4ms'
         osDiskSizeGB: 128
         osDiskType: 'Managed'
         vnetSubnetID: subnetId
-        maxCount: 5
-        minCount: 1
-        enableAutoScaling: true
         enableNodePublicIP: false
-        mode: 'System'       
+        mode: 'System'
         osType: 'Linux'
         osSKU: 'Ubuntu'
       }
@@ -50,4 +54,37 @@ resource aks 'Microsoft.ContainerService/managedClusters@2022-07-01' = {
     name: 'Basic'
     tier: 'Free'
   }
+  tags: tags
 }
+
+/*
+resource privateLinkService 'Microsoft.Network/privateLinkServices@2022-07-01' = {
+  name: '${resourcePrefix}-pls-aks'
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: 'aks-1'
+        properties: {
+          privateIPAllocationMethod: 'Static'
+          privateIPAddress: privateLinkServiceIp//''
+          subnet: {
+            id: subnetId
+          }
+        }
+      }
+    ]
+    visibility: {
+      subscriptions: [
+        subscription().id
+      ]
+    }
+    autoApproval: {
+      subscriptions: [
+        subscription().id
+      ]
+    }
+  }
+  tags: tags
+}
+*/
