@@ -19,7 +19,7 @@ spec:
         app: mrm-weather
     spec:
       containers:
-      - image: mrmakstutorialeusacr.azurecr.io/cdcgenericmicroserviceapi:latest
+      - image: mrmmicrosvcscusacr.azurecr.io/cdcgenericmicroserviceapi:latest
         name: cdcgenericmicroserviceapi
         ports:
         - containerPort: 80
@@ -28,7 +28,7 @@ spec:
           requests:
             cpu: 250m
           limits:
-            cpu: 500m
+            cpu: 750m
 ---
 apiVersion: v1
 kind: Service

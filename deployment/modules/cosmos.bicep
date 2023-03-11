@@ -21,7 +21,7 @@ resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2022-05-15' = {
 }
 
 module privateEndpoint 'privateendpoint.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-pe-cosmos'
+  name: '${timeStamp}-pe-cosmos'
   scope: resourceGroup(networkResourceGroupName)
   params: {
     location: location

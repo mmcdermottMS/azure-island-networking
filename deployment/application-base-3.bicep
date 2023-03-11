@@ -60,24 +60,26 @@ resource utilRg 'Microsoft.Resources/resourceGroups@2020-06-01' = {
 }
 
 resource bridgeVnet 'Microsoft.Network/virtualNetworks@2022-05-01' existing = {
-  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge01'
+  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge02'
   scope: resourceGroup(coreNetworkRgName)
 }
 
 resource bridgeAzFw 'Microsoft.Network/azureFirewalls@2022-05-01' existing = {
-  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge01-azfw'
+  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge02-azfw'
   scope: resourceGroup(coreNetworkRgName)
 }
 
-param islandVnetAddressSpace string = '192.168.128.0/18'
-param aksSubnetAddressPrefix string = '192.168.128.0/22'          // 1019 addresses - 192.168.0.0 - 192.168.4.0
-param utilSubnetAddressPrefix string = '192.168.132.0/22'         // 1019 addresses - 192.168.4.0 - 192.168.8.0
-param privateEndpointAddressPrefix string = '192.168.136.0/24'    // 251  addresses - 192.168.8.0 - 192.168.9.0
+param islandVnetAddressSpace string = '192.168.0.0/16'
+param spaRuntimeSubnetAddressPrefix string = '192.168.0.0/22'   // 1019 addresses - 192.168.0.0 - 192.168.4.0
+param spaAppsSubnetAddressPrefix string = '192.168.4.0/22'      // 1019 addresses - 192.168.4.0 - 192.168.8.0
+param utilSubnetAddressPrefix string = '192.168.8.0/24'         // 251  addresses - 192.168.8.0 - 192.168.9.0
+param privateEndpointAddressPrefix string = '192.168.9.0/24'    // 251  addresses - 192.168.9.0 - 192.168.10.0
 
 module vnet 'modules/vnet.bicep' = {
   name: '${timeStamp}-vnet'
   scope: resourceGroup(workloadNetworkRg.name)
   params: {
+    isForSpringApps: true
     vnetName: '${resourcePrefix}-workload'
     location: region
     addressSpaces: [
@@ -85,14 +87,26 @@ module vnet 'modules/vnet.bicep' = {
     ]
     subnets: [
       {
-        name: 'aks'
+        name: 'spa-runtime'
         properties: {
-          addressPrefix: aksSubnetAddressPrefix
+          addressPrefix: spaRuntimeSubnetAddressPrefix
+          routeTable: {
+            id: spaRuntimeRoute.outputs.id
+          }
+          networkSecurityGroup: {
+            id: runtimeNsg.outputs.id
+          }
+        }
+      }
+      {
+        name: 'spa-apps'
+        properties: {
+          addressPrefix: spaAppsSubnetAddressPrefix
           routeTable: {
             id: route.outputs.id
           }
           networkSecurityGroup: {
-            id: aksIntegrationNsg.outputs.id
+            id: appNsg.outputs.id
           }
         }
       }
@@ -160,28 +174,61 @@ module route 'modules/udr.bicep' = {
   }
 }
 
-// NSG for AKS subnet
-module aksIntegrationNsg 'modules/nsg.bicep' = {
-  name: '${timeStamp}-nsg-aks'
+//TODO: This route table isn't quite right, but allows for communcation to app insights.  Using for now until we figure out how to route AI
+// traffic correctly through the firewall
+module spaRuntimeRoute 'modules/udr.bicep' = {
+  name: '${timeStamp}-spa-runtime-udr'
   scope: resourceGroup(workloadNetworkRg.name)
   params: {
-    name: '${resourcePrefix}-workload-nsg-aks'
+    name: '${resourcePrefix}-spa-runtime-udr'
     location: region
-    securityRules: [
+    routes: [
       {
-        name: 'AllowAnyHTTPInbound'
+        name: '${resourcePrefix}-egress'
         properties: {
-          priority: 100
-          protocol: 'TCP'
-          access: 'Allow'
-          direction: 'Inbound'
-          sourceAddressPrefix: '*'
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '80'
+          addressPrefix: '0.0.0.0/0'
+          nextHopType: 'Internet'
+        }
+      }
+      {
+        name: '${resourcePrefix}-hub'
+        properties: {
+          addressPrefix: '192.168.0.0/16'
+          nextHopType: 'VirtualAppliance'
+          nextHopIpAddress: bridgeAzFw.properties.ipConfigurations[0].properties.privateIPAddress
+        }
+      }
+      {
+        name: '${resourcePrefix}-island'
+        properties: {
+          addressPrefix: '10.0.0.0/8'
+          nextHopType: 'VirtualAppliance'
+          nextHopIpAddress: bridgeAzFw.properties.ipConfigurations[0].properties.privateIPAddress
         }
       }
     ]
+  }
+}
+
+// NSG for Spring Apps Runtime
+module runtimeNsg 'modules/nsg.bicep' = {
+  name: '${timeStamp}-spa-runtime-nsg'
+  scope: resourceGroup(workloadNetworkRg.name)
+  params: {
+    name: 'spa-runtime-nsg'
+    location: region
+    securityRules: [ ]
+  }
+}
+
+// NSG for Spring Boot Apps 
+module appNsg 'modules/nsg.bicep' = {
+  name: '${timeStamp}-spa-app-nsg'
+  scope: resourceGroup(workloadNetworkRg.name)
+  params: {
+    name: 'spa-app-nsg'
+    location: region
+    securityRules: [ ]
   }
 }
 

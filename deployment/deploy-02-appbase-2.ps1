@@ -31,4 +31,4 @@ switch ($location) {
     }
 }
 
-az deployment sub create --name "$timeStamp-appbase" --location $location --template-file application-base-2.bicep --parameters application-base.params.json region=$location orgPrefix=$orgPrefix appPrefix=$appPrefix regionCode=$regionCode corePrefix='core'
+az deployment sub create --name "$timeStamp-appbase-$appPrefix" --location $location --template-file application-base-2.bicep --parameters application-base.params.json region=$location orgPrefix=$orgPrefix appPrefix=$appPrefix regionCode=$regionCode corePrefix='core'

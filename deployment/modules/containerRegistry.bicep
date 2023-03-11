@@ -35,7 +35,7 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 }
 
 module privateEndpoint 'privateendpoint.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-pe-acr'
+  name: '${timeStamp}-pe-acr'
   scope: resourceGroup(networkResourceGroupName)
   params: {
     location: location

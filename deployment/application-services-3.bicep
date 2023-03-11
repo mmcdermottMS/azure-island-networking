@@ -18,15 +18,6 @@ var acrPullMiName = '${resourcePrefix}-mi-acrPull'
 var keyVaultUserMiName = '${resourcePrefix}-mi-kvSecretsUser'
 var networkContributorMiName = '${resourcePrefix}-mi-network-contributor'
 
-
-//az aks get-credentials --resource-group mrm-microsvcs-workload --name mrm-microsvcs-cus-aks
-//kubectl apply -f aks-manifest.yaml
-//kubectl get service mrm-weather --watch
-//kubectl get events -n default
-//kubectl get pods -o wide
-
-
-
 //NOTE: This is set to false for ease of testing and rapid iteration on changes.  For real workloads this should be set to true
 var enableSoftDeleteForKeyVault = false
 
@@ -77,36 +68,12 @@ module containerRegistry 'Modules/containerRegistry.bicep' = {
   }
 }
 
-module networkContributorMi 'modules/managedIdentity.bicep' = {
-  name: '${timeStamp}-mi-networkContributor'
-  scope: resourceGroup(workloadResourceGroupName)
+module springApps 'modules/springApps.bicep' = {
+  name: '${timeStamp}-springApps'
   params: {
+    appSubnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${fullPrefix}-network/providers/Microsoft.Network/virtualNetworks/${resourcePrefix}-workload/subnets/spa-apps'
     location: location
-    name: networkContributorMiName
-    tags: tags
+    resourpcePrefix: resourcePrefix
+    serviceRuntimeSubnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${fullPrefix}-network/providers/Microsoft.Network/virtualNetworks/${resourcePrefix}-workload/subnets/spa-runtime'
   }
-}
-
-module networkRoleAssignment 'modules/roleAssignment.bicep' = {
-  name: '${timeStamp}-network-contributor-role-assignment'
-  scope: resourceGroup(networkResourceGroupName)
-  params: {
-    principalId: networkContributorMi.outputs.principalId
-  }
-}
-
-module aks 'modules/aks.bicep' = {
-  name: '${timeStamp}-aks'
-  params: {
-    location: location
-    networkContributorMiName: networkContributorMiName
-    privateLinkServiceIp: '192.168.64.4' //TODO: migrate this to the parameters file
-    resourcePrefix: resourcePrefix
-    subnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${fullPrefix}-network/providers/Microsoft.Network/virtualNetworks/${resourcePrefix}-workload/subnets/aks'
-    tags: tags
-  }
-  dependsOn: [
-    networkContributorMi
-    networkRoleAssignment
-  ]
 }

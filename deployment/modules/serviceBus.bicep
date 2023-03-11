@@ -32,7 +32,7 @@ resource queues 'Microsoft.ServiceBus/namespaces/queues@2021-11-01' = [for queue
 }]
 
 module privateEndpoint 'privateendpoint.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-pe-sbns'
+  name: '${timeStamp}-pe-sbns'
   scope: resourceGroup(networkResourceGroupName)
   params: {
     location: location

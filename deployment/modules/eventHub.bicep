@@ -29,7 +29,7 @@ resource eventHubs 'Microsoft.EventHub/namespaces/eventhubs@2021-11-01' = [for e
 }]
 
 module privateEndpoint 'privateendpoint.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-pe-ehns'
+  name: '${timeStamp}-pe-ehns'
   scope: resourceGroup(networkResourceGroupName)
   params: {
     location: location

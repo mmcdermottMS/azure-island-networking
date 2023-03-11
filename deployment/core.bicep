@@ -44,6 +44,13 @@ param spokeVnetVmAddressSpace string = '10.10.32.0/25' // 123 addresses - 10.10.
 param spokeVnetPrivateLinkAddressSpace string = '10.10.32.128/25' // 123 addresses - 10.10.32.128 - 10.10.32.255
 param spokeVnetIntegrationSubnetAddressSpace string = '10.10.33.0/25' // 123 addresses - 10.10.33.0 - 10.10.33.127
 
+// SECOND BRIDGE VNET IP SETTINGS
+param bridge02VnetAddressSpace string = '10.10.64.0/20'
+param bridge02FirewallSubnetAddressSpace string = '10.10.64.0/25' // 123 addresses - 10.10.16.0 - 10.10.16.127
+param bridge02BastionSubnetAddressSpace string = '10.10.64.128/25' // 123 addresses - 10.10.16.128 - 10.10.0.255
+param bridge02PrivateLinkSubnetAddressSpace string = '10.10.65.0/25' // 123 addresses - 10.10.17.0 - 10.10.17.127
+param bridge02AppGatewaySubnetAddressSpace string = '10.10.65.128/25' // 123 addresses - 10.10.17.128 - 10.10.17.255
+
 // ISLAND NEtworks
 param islandNetworkAddressSpace string = '192.168.0.0/16' // used by AZ FW for SNAT rules
 
@@ -136,11 +143,11 @@ module hubVnet 'modules/vnet.bicep' = {
   }
 }
 
-module bridgeVnet 'modules/vnet.bicep' = {
-  name: 'bridge-vnet'
+module bridge01Vnet 'modules/vnet.bicep' = {
+  name: 'bridge01-vnet'
   scope: resourceGroup(netrg.name)
   params: {
-    vnetName: '${resourcePrefix}-bridge'
+    vnetName: '${resourcePrefix}-bridge01'
     location: region
     addressSpaces: [
       bridgeVnetAddressSpace
@@ -186,6 +193,57 @@ module bridgeVnet 'modules/vnet.bicep' = {
     ]
   }
 
+}
+
+module bridge02Vnet 'modules/vnet.bicep' = {
+  name: 'bridge02-vnet'
+  scope: resourceGroup(netrg.name)
+  params: {
+    vnetName: '${resourcePrefix}-bridge02'
+    location: region
+    addressSpaces: [
+      bridge02VnetAddressSpace
+    ]
+    subnets: [
+      {
+        name: 'AzureFirewallSubnet'
+        properties: {
+          addressPrefix: bridge02FirewallSubnetAddressSpace
+          routeTable: {
+            id: bridgeRoute.outputs.id
+          }
+        }
+      }
+      {
+        // NOTE: UDR not allowed in a Bastion subnet
+        name: 'AzureBastionSubnet'
+        properties: {
+          addressPrefix: bridge02BastionSubnetAddressSpace
+          networkSecurityGroup: {
+            id: bastionNsg.outputs.id
+          }
+        }
+      }
+      {
+        name: 'privatelinks'
+        properties: {
+          addressPrefix: bridge02PrivateLinkSubnetAddressSpace
+          networkSecurityGroup: {
+            id: bridgePrivateLinkNsg.outputs.id
+          }
+        }
+      }
+      {
+        name: 'appgateways'
+        properties: {
+          addressPrefix: bridge02AppGatewaySubnetAddressSpace
+          networkSecurityGroup: {
+            id: bridgeAppGatewayNsg.outputs.id
+          }
+        }
+      }
+    ]
+  }
 }
 
 module spokeVnet 'modules/vnet.bicep' = {
@@ -250,7 +308,7 @@ module spokeVnet 'modules/vnet.bicep' = {
 
 // NSG for Services subnet (Private Endpoints from Islands)
 module servicesNsg 'modules/nsg.bicep' = {
-  name: '${resourcePrefix}-hub-services'
+  name: 'hub-services'
   scope: resourceGroup(netrg.name)
   params: {
     name: '${resourcePrefix}-hub-services'
@@ -261,7 +319,7 @@ module servicesNsg 'modules/nsg.bicep' = {
 
 // NSG for DNS subnet (Linux server running BIND)
 module hubDnsNsg 'modules/nsg.bicep' = {
-  name: '${resourcePrefix}-hub-dns'
+  name: 'hub-dns'
   scope: resourceGroup(netrg.name)
   params: {
     name: '${resourcePrefix}-hub-dns'
@@ -307,7 +365,7 @@ module hubDnsNsg 'modules/nsg.bicep' = {
 
 // NSG for Bastion subnet
 module bastionNsg 'modules/nsg.bicep' = {
-  name: '${resourcePrefix}-bridge-bastion'
+  name: 'bridge-bastion'
   scope: resourceGroup(netrg.name)
   dependsOn: [
     hubDnsNsg
@@ -433,7 +491,7 @@ module bastionNsg 'modules/nsg.bicep' = {
 
 // NSG for Azure services configured with Private Link (bridge)
 module bridgePrivateLinkNsg 'modules/nsg.bicep' = {
-  name: '${resourcePrefix}-bridge-privatelinks'
+  name: 'bridge-privatelinks'
   scope: resourceGroup(netrg.name)
   params: {
     name: '${resourcePrefix}-bridge-privatelinks'
@@ -471,7 +529,7 @@ module bridgePrivateLinkNsg 'modules/nsg.bicep' = {
 
 // NSG for App Gateway subnet (private build servers)
 module bridgeAppGatewayNsg 'modules/nsg.bicep' = {
-  name: '${resourcePrefix}-bridge-appgw'
+  name: 'bridge-appgw'
   scope: resourceGroup(netrg.name)
   dependsOn: [
     bastionNsg
@@ -499,7 +557,7 @@ module bridgeAppGatewayNsg 'modules/nsg.bicep' = {
 
 // NSG for Azure Functions subnet
 module spokeVirtualMachinesNsg 'modules/nsg.bicep' = {
-  name: '${resourcePrefix}-spoke-iaas'
+  name: 'spoke-iaas'
   scope: resourceGroup(netrg.name)
   params: {
     name: '${resourcePrefix}-spoke-iaas'
@@ -544,7 +602,7 @@ module spokeVirtualMachinesNsg 'modules/nsg.bicep' = {
 
 // NSG for Azure Functions subnet
 module spokeFuncIntegrationNsg 'modules/nsg.bicep' = {
-  name: '${resourcePrefix}-spoke-functions'
+  name: 'spoke-functions-nsg'
   scope: resourceGroup(netrg.name)
   params: {
     name: '${resourcePrefix}-spoke-functions'
@@ -569,7 +627,7 @@ module spokeFuncIntegrationNsg 'modules/nsg.bicep' = {
 
 // NSG for Azure services configured with Private Link (spoke)
 module spokePrivateLinkNsg 'modules/nsg.bicep' = {
-  name: '${resourcePrefix}-spoke-privatelinks'
+  name: 'spoke-privatelinks'
   scope: resourceGroup(netrg.name)
   dependsOn: [
     spokeFuncIntegrationNsg
@@ -669,13 +727,71 @@ module hubAzFw 'modules/azfw.bicep' = {
 
 // Azure Firewall - BRIDGE
 module bridgeAzFw 'modules/azfw.bicep' = {
-  name: 'bridge-azfw'
+  name: 'bridge01-azfw'
   scope: resourceGroup(netrg.name)
   params: {
-    prefix: '${resourcePrefix}-bridge'
+    prefix: '${resourcePrefix}-bridge01'
     fireWallSubnetName: 'AzureFirewallSubnet'
     location: region
-    hubVnetName: bridgeVnet.outputs.name
+    hubVnetName: bridge01Vnet.outputs.name
+    privateTrafficPrefixes: islandNetworkAddressSpace
+    networkRules: [
+      {
+        name: 'island-networking-config'
+        properties: {
+          action: { type: 'Allow' }
+          priority: 100
+          rules: [
+            {
+              description: 'Allow outbound web traffic'
+              name: 'island-to-internet'
+              protocols: [
+                'TCP'
+              ]
+              sourceAddresses: [
+                '192.160.0.0/16'
+              ]
+              destinationAddresses: [
+                '*'
+              ]
+              destinationPorts: [
+                '80'
+                '443'
+              ]
+            }
+            {
+              description: 'Allow Island to Corp'
+              name: 'island-to-corp'
+              protocols: [
+                'TCP'
+                'UDP'
+              ]
+              sourceAddresses: [
+                '192.168.0.0/16'
+              ]
+              destinationAddresses: [
+                '10.0.0.0/8'
+              ]
+              destinationPorts: [
+                '*'
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+
+// Azure Firewall - BRIDGE
+module bridge02AzFw 'modules/azfw.bicep' = {
+  name: 'bridge02-azfw'
+  scope: resourceGroup(netrg.name)
+  params: {
+    prefix: '${resourcePrefix}-bridge02'
+    fireWallSubnetName: 'AzureFirewallSubnet'
+    location: region
+    hubVnetName: bridge02Vnet.outputs.name
     privateTrafficPrefixes: islandNetworkAddressSpace
     networkRules: [
       {
@@ -748,20 +864,40 @@ module SpokeToHubPeering 'modules/peering.bicep' = {
 }
 
 module HubToBridgePeering 'modules/peering.bicep' = {
-  name: 'hub-to-bridge-peering'
+  name: 'hub-to-bridge01-peering'
   scope: resourceGroup(netrg.name)
   params: {
     localVnetName: hubVnet.outputs.name
-    remoteVnetName: 'bridge'
-    remoteVnetId: bridgeVnet.outputs.id
+    remoteVnetName: 'bridge01'
+    remoteVnetId: bridge01Vnet.outputs.id
   }
 }
 
 module BridgeToHubPeering 'modules/peering.bicep' = {
-  name: 'bridge-to-hub-peering'
+  name: 'bridge01-to-hub-peering'
   scope: resourceGroup(netrg.name)
   params: {
-    localVnetName: bridgeVnet.outputs.name
+    localVnetName: bridge01Vnet.outputs.name
+    remoteVnetName: 'hub'
+    remoteVnetId: hubVnet.outputs.id
+  }
+}
+
+module HubTobridge02Peering 'modules/peering.bicep' = {
+  name: 'hub-to-bridge02-peering'
+  scope: resourceGroup(netrg.name)
+  params: {
+    localVnetName: hubVnet.outputs.name
+    remoteVnetName: 'bridge02'
+    remoteVnetId: bridge02Vnet.outputs.id
+  }
+}
+
+module bridge02ToHubPeering 'modules/peering.bicep' = {
+  name: 'bridge02-to-hub-peering'
+  scope: resourceGroup(netrg.name)
+  params: {
+    localVnetName: bridge02Vnet.outputs.name
     remoteVnetName: 'hub'
     remoteVnetId: hubVnet.outputs.id
   }
@@ -814,16 +950,27 @@ module bridgeRoute 'modules/udr.bicep' = {
   }
 }
 
-// Bastion
+// Bastion for first bridge
 module bastion 'modules/bastion.bicep' = {
-  name: 'bridge-bastion'
+  name: 'bridge01-bastion'
   scope: resourceGroup(netrg.name)
   params: {
-    name: '${resourcePrefix}-bastion'
+    prefix: '${resourcePrefix}-bridge01'
     location: region
-    subnetId: '${bridgeVnet.outputs.id}/subnets/AzureBastionSubnet'
+    subnetId: '${bridge01Vnet.outputs.id}/subnets/AzureBastionSubnet'
   }
 }
+
+module bastion2 'modules/bastion.bicep' = {
+  name: 'bridge02-bastion'
+  scope: resourceGroup(netrg.name)
+  params: {
+    prefix: '${resourcePrefix}-bridge02'
+    location: region
+    subnetId: '${bridge02Vnet.outputs.id}/subnets/AzureBastionSubnet'
+  }
+}
+
 
 // Private DNS zone for Azure Web Sites (Functions and Web Apps)
 module privateZoneAzureWebsites 'modules/dnszoneprivate.bicep' = {
@@ -1034,7 +1181,7 @@ module hubVnetAzureZoneLink 'modules/dnszonelink.bicep' = {
   }
 }
 
-// TODO: THIS IS A HACK - need to find a better way to apply the UDR to the DNS server subnet
+// HACK: THIS IS A HACK - need to find a better way to apply the UDR to the DNS server subnet
 module applyHubRoutes 'modules/vnet.bicep' = {
   name: 'hub-vnet-update'
   scope: resourceGroup(netrg.name)

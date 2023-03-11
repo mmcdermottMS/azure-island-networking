@@ -128,7 +128,7 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
 }
 
 module privateEndpoint 'privateendpoint.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-pe-${functionAppNameSuffix}'
+  name: '${timeStamp}-pe-${functionAppNameSuffix}'
   scope: resourceGroup(networkResourceGroupName)
   params: {
     location: location
@@ -143,7 +143,7 @@ module privateEndpoint 'privateendpoint.bicep' = {
   }
 }
 
-//TODO: This is a total hack.  If you initially deploy a function app's storage account with a default action of
+// HACK: This is a total hack.  If you initially deploy a function app's storage account with a default action of
 // 'Deny', the deployment of the function app (with storage configuration) will fail.  So need to do the initial 
 // deployment of the storage account with networking open, then deploy the function app, then redeploy the same
 // storage account with networking locked down
@@ -159,4 +159,17 @@ module networkLockedStorage 'storage.bicep' = {
   dependsOn: [
     functionApp
   ]
+}
+
+var roleDefinitionID = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+var principalId = functionApp.identity.principalId
+var roleAssignmentName= guid(functionApp.id, roleDefinitionID, resourceGroup().id)
+
+resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01'= {
+  name: roleAssignmentName
+  properties: {
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', roleDefinitionID)
+    principalId: principalId
+  }
+  scope: storageAccount
 }

@@ -60,12 +60,12 @@ resource utilRg 'Microsoft.Resources/resourceGroups@2020-06-01' = {
 }
 
 resource bridgeVnet 'Microsoft.Network/virtualNetworks@2022-05-01' existing = {
-  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge'
+  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge01'
   scope: resourceGroup(coreNetworkRgName)
 }
 
 resource bridgeAzFw 'Microsoft.Network/azureFirewalls@2022-05-01' existing = {
-  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge-azfw'
+  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge01-azfw'
   scope: resourceGroup(coreNetworkRgName)
 }
 

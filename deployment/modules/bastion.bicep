@@ -1,9 +1,9 @@
-param name string
+param prefix string
 param subnetId string
 param location string
 
 resource bastionIP 'Microsoft.Network/publicIPAddresses@2020-06-01' = {
-  name: '${name}-ip'
+  name: '${prefix}-bastion-ip'
   location: location
   properties: {
     publicIPAddressVersion: 'IPv4'
@@ -15,7 +15,7 @@ resource bastionIP 'Microsoft.Network/publicIPAddresses@2020-06-01' = {
 }
 
 resource bastion 'Microsoft.Network/bastionHosts@2020-06-01' = {
-  name: name
+  name: '${prefix}-bastion'
   location: location
   properties: {
     ipConfigurations: [

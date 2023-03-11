@@ -16,14 +16,16 @@ Function DecoratedOutput {
 }
 
 $timeStamp = Get-Date -Format "yyyyMMddHHmm"
-$location = $Args[0]
-$orgPrefix = $Args[1]
-$firstAppPrefix = $Args[2]
-$secondAppPrefix = $Args[3]
-$subscriptionId = $Args[4]
+$subscriptionId = $Args[0]
+$location = $Args[1]
+$orgPrefix = $Args[2]
+$firstAppPrefix = $Args[3]
+$secondAppPrefix = $Args[4]
+$thirdAppPrefix = $Args[5]
 
-if($Args.Length -lt 5) {
-    Write-Warning "Usage: deploy-all.ps1 {location} {orgPrefix} {firstWorkloadPrefix} {secondWorkloadPrefix} {subscriptionId}"
+
+if ($Args.Length -lt 4) {
+    Write-Warning "Usage: deploy-all.ps1 {subscriptionId} {location} {orgPrefix} {firstWorkloadPrefix} [optional]{secondWorkloadPrefix} [optional]{thirdWorkloadPrefix}"
     exit
 }
 
@@ -106,11 +108,11 @@ $cosmosRoleId = ''
 if ([string]::IsNullOrWhiteSpace($cosmosRoleId)) {
     $cosmosRoleId = (az cosmosdb sql role definition create --resource-group $targetResourceGroup --account-name $cosmosAccountName --body "@cosmos.role.definition.json" --query id --output tsv)
     DecoratedOutput "Created Custom Cosmos Read/Write Role"
-} else {
+}
+else {
     DecoratedOutput "Custom Cosmos Read/Write Role already exists"
 }
 
-<#
 # For each of the function apps we created...
 $functionApps | ForEach-Object {
     $functionAppNameSuffix = $_.AppNameSuffix
@@ -123,17 +125,9 @@ $functionApps | ForEach-Object {
         $storageAccountName = $storageAccountName.Substring(0, 24)
     }
 
-    # Create a system managed identity for the function app.  This will be used to access storage accounts, event hubs, and service bus via managed identity
-    $functionAppIdentityId = (az functionapp identity assign --resource-group $targetResourceGroup --name "$appName-$regionCode-$functionAppNameSuffix" --query principalId --output tsv)
-    DecoratedOutput "Created $functionAppNameSuffix identity:" $functionAppIdentityId
-
-    if ([string]::IsNullOrWhiteSpace($storageAccountSuffix) -ne $true) {
-        # Assign function app's system identity to the storage blob data owner role
-        $storageBlobDataOwnerRoleId = (az role definition list --name "Storage Blob Data Owner" --query [0].id --output tsv)
-        DecoratedOutput "Got Storage Blog Data Role Id:" $storageBlobDataOwnerRoleId
-        $storageBlobRoleAssignment_output = az role assignment create --assignee $functionAppIdentityId --role $storageBlobDataOwnerRoleId --scope "/subscriptions/$subscriptionId/resourcegroups/$targetResourceGroup/providers/Microsoft.Storage/storageAccounts/$storageAccountName"
-        DecoratedOutput "Completed role assignment of $functionAppNameSuffix to" $storageAccountName
-    }
+    # Get the system managed identity for the function app.  This will be used to access tje storage accounts via managed identity
+    $functionAppIdentityId = (az functionapp identity show --resource-group $targetResourceGroup --name "$appName-$regionCode-$functionAppNameSuffix" --query principalId --output tsv)
+    DecoratedOutput "Got $functionAppNameSuffix identity:" $functionAppIdentityId
 
     # Assign function app's system identity to the service bus data owner role
     # The owner role needs to be assigned to the listener (instead of the receiver role) so that it can peek into the queue 
@@ -159,25 +153,47 @@ $functionApps | ForEach-Object {
     $cosmosRoleAssiment_output = az cosmosdb sql role assignment create --account-name $cosmosAccountName --resource-group $targetResourceGroup --scope "/" --principal-id $functionAppIdentityId --role-definition-id $cosmosRoleId
     DecoratedOutput "Assigned Custom Cosmos Role to" $functionAppNameSuffix
 }
-#>
 
-$appName = "$orgPrefix-$secondAppPrefix"
-$aksName = "$appName-$regionCode-aks"
-$containerRegistryName = $appName.ToString().ToLower().Replace("-", "") + "$regionCode" + "acr"
+if ($Args.Length -ge 5) {
+    $appName = "$orgPrefix-$secondAppPrefix"
+    $aksName = "$appName-$regionCode-aks"
+    $containerRegistryName = $appName.ToString().ToLower().Replace("-", "") + "$regionCode" + "acr"
 
-DecoratedOutput "Deploying App Base for Second Workload..."
-$appbase_output = az deployment sub create --name "$timeStamp-appbase" --location $location --template-file application-base-2.bicep --parameters application-base.params.json region=$location orgPrefix=$orgPrefix appPrefix=$secondAppPrefix regionCode=$regionCode corePrefix='core'
-DecoratedOutput "App Base for Second Workload Deployed."
+    DecoratedOutput "Deploying App Base for Second Workload..."
+    $appbase_output = az deployment sub create --name "$timeStamp-appbase-2" --location $location --template-file application-base-2.bicep --parameters application-base.params.json region=$location orgPrefix=$orgPrefix appPrefix=$secondAppPrefix regionCode=$regionCode corePrefix='core'
+    DecoratedOutput "App Base for Second Workload Deployed."
 
-$targetResourceGroup = "$orgPrefix-$secondAppPrefix-workload"
-DecoratedOutput "Setting Target Resource Group to" $targetResourceGroup
-$defaultGroup_output = az configure --defaults group="$targetResourceGroup"
+    $targetResourceGroup = "$orgPrefix-$secondAppPrefix-workload"
+    DecoratedOutput "Setting Target Resource Group to" $targetResourceGroup
+    $defaultGroup_output = az configure --defaults group="$targetResourceGroup"
 
-DecoratedOutput "Deploying Second Workload..."
-$appsvc_output = az deployment group create --name "$timeStamp-appsvc" --template-file application-services-2.bicep --parameters application-services.params.json orgPrefix=$orgPrefix appPrefix=$secondAppPrefix regionCode=$regionCode
-DecoratedOutput "Second Workload Deployed."
+    DecoratedOutput "Deploying Second Workload..."
+    $appsvc_output = az deployment group create --name "$timeStamp-appsvc-2" --template-file application-services-2.bicep --parameters application-services.params.json orgPrefix=$orgPrefix appPrefix=$secondAppPrefix regionCode=$regionCode
+    DecoratedOutput "Second Workload Deployed."
 
-# Wire up ACR to AKS
-$aksUpdate_output = az aks update -n $aksName -g $targetResourceGroup --attach-acr $containerRegistryName
-DecoratedOutput "Wired up AKS to ACR"
-#>
+    # Wire up ACR to AKS
+    $aksUpdate_output = az aks update -n $aksName -g $targetResourceGroup --attach-acr $containerRegistryName
+    DecoratedOutput "Wired up AKS to ACR"
+}
+
+if ($Args.Length -ge 6) {
+    $appName = "$orgPrefix-$thirdAppPrefix"
+    $aksName = "$appName-$regionCode-aks"
+    $containerRegistryName = $appName.ToString().ToLower().Replace("-", "") + "$regionCode" + "acr"
+
+    DecoratedOutput "Deploying App Base for Third Workload..."
+    $appbase_output = az deployment sub create --name "$timeStamp-appbase-3" --location $location --template-file application-base-3.bicep --parameters application-base.params.json region=$location orgPrefix=$orgPrefix appPrefix=$thirdAppPrefix regionCode=$regionCode corePrefix='core'
+    DecoratedOutput "App Base for Third Workload Deployed."
+
+    $targetResourceGroup = "$orgPrefix-$ThirdAppPrefix-workload"
+    DecoratedOutput "Setting Target Resource Group to" $targetResourceGroup
+    $defaultGroup_output = az configure --defaults group="$targetResourceGroup"
+
+    DecoratedOutput "Deploying Third Workload..."
+    $appsvc_output = az deployment group create --name "$timeStamp-appsvc-3" --template-file application-services-3.bicep --parameters application-services.params.json orgPrefix=$orgPrefix appPrefix=$thirdAppPrefix regionCode=$regionCode
+    DecoratedOutput "Third Workload Deployed."
+
+    # Wire up ACR to AKS
+    $aksUpdate_output = az aks update -n $aksName -g $targetResourceGroup --attach-acr $containerRegistryName
+    DecoratedOutput "Wired up AKS to ACR"
+}
