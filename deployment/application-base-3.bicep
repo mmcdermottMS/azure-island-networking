@@ -90,11 +90,11 @@ module vnet 'modules/vnet.bicep' = {
         name: 'spa-runtime'
         properties: {
           addressPrefix: spaRuntimeSubnetAddressPrefix
-          routeTable: {
-            id: spaRuntimeRoute.outputs.id
-          }
           networkSecurityGroup: {
             id: runtimeNsg.outputs.id
+          }
+          routeTable: {
+            id: spaRuntimeRoute.outputs.id
           }
         }
       }
@@ -102,11 +102,11 @@ module vnet 'modules/vnet.bicep' = {
         name: 'spa-apps'
         properties: {
           addressPrefix: spaAppsSubnetAddressPrefix
-          routeTable: {
-            id: route.outputs.id
-          }
           networkSecurityGroup: {
             id: appNsg.outputs.id
+          }
+          routeTable: {
+            id: route.outputs.id
           }
         }
       }

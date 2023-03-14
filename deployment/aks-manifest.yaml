@@ -19,7 +19,7 @@ spec:
         app: mrm-weather
     spec:
       containers:
-      - image: mrmmicrosvcscusacr.azurecr.io/cdcgenericmicroserviceapi:latest
+      - image: msftmicrosvcscusacr.azurecr.io/cdcgenericmicroserviceapi:latest
         name: cdcgenericmicroserviceapi
         ports:
         - containerPort: 80

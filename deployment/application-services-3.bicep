@@ -54,26 +54,14 @@ module vmPasswordSecret 'modules/keyVaultSecrent.bicep' = {
   }
 }
 
-module containerRegistry 'Modules/containerRegistry.bicep' = {
-  name: '${timeStamp}-acr'
-  params: {
-    acrPullMiName: acrPullMiName
-    location: location
-    networkResourceGroupName: networkResourceGroupName
-    dnsResourceGroupName: dnsResourceGroupName
-    resourcePrefix: resourcePrefix
-    tags: tags
-    timeStamp: timeStamp
-    vnetName: workloadVnetName
-  }
-}
-
+/*
 module springApps 'modules/springApps.bicep' = {
   name: '${timeStamp}-springApps'
   params: {
     appSubnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${fullPrefix}-network/providers/Microsoft.Network/virtualNetworks/${resourcePrefix}-workload/subnets/spa-apps'
     location: location
-    resourpcePrefix: resourcePrefix
+    resourcePrefix: resourcePrefix
     serviceRuntimeSubnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${fullPrefix}-network/providers/Microsoft.Network/virtualNetworks/${resourcePrefix}-workload/subnets/spa-runtime'
   }
 }
+*/

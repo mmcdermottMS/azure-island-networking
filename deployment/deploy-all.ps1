@@ -177,10 +177,6 @@ if ($Args.Length -ge 5) {
 }
 
 if ($Args.Length -ge 6) {
-    $appName = "$orgPrefix-$thirdAppPrefix"
-    $aksName = "$appName-$regionCode-aks"
-    $containerRegistryName = $appName.ToString().ToLower().Replace("-", "") + "$regionCode" + "acr"
-
     DecoratedOutput "Deploying App Base for Third Workload..."
     $appbase_output = az deployment sub create --name "$timeStamp-appbase-3" --location $location --template-file application-base-3.bicep --parameters application-base.params.json region=$location orgPrefix=$orgPrefix appPrefix=$thirdAppPrefix regionCode=$regionCode corePrefix='core'
     DecoratedOutput "App Base for Third Workload Deployed."
@@ -190,10 +186,6 @@ if ($Args.Length -ge 6) {
     $defaultGroup_output = az configure --defaults group="$targetResourceGroup"
 
     DecoratedOutput "Deploying Third Workload..."
-    $appsvc_output = az deployment group create --name "$timeStamp-appsvc-3" --template-file application-services-3.bicep --parameters application-services.params.json orgPrefix=$orgPrefix appPrefix=$thirdAppPrefix regionCode=$regionCode
+    #$appsvc_output = az deployment group create --name "$timeStamp-appsvc-3" --template-file application-services-3.bicep --parameters application-services.params.json orgPrefix=$orgPrefix appPrefix=$thirdAppPrefix regionCode=$regionCode
     DecoratedOutput "Third Workload Deployed."
-
-    # Wire up ACR to AKS
-    $aksUpdate_output = az aks update -n $aksName -g $targetResourceGroup --attach-acr $containerRegistryName
-    DecoratedOutput "Wired up AKS to ACR"
 }

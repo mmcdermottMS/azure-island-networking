@@ -734,7 +734,7 @@ module bridgeAzFw 'modules/azfw.bicep' = {
     fireWallSubnetName: 'AzureFirewallSubnet'
     location: region
     hubVnetName: bridge01Vnet.outputs.name
-    privateTrafficPrefixes: islandNetworkAddressSpace
+    //privateTrafficPrefixes: islandNetworkAddressSpace
     networkRules: [
       {
         name: 'island-networking-config'
@@ -792,7 +792,7 @@ module bridge02AzFw 'modules/azfw.bicep' = {
     fireWallSubnetName: 'AzureFirewallSubnet'
     location: region
     hubVnetName: bridge02Vnet.outputs.name
-    privateTrafficPrefixes: islandNetworkAddressSpace
+    //privateTrafficPrefixes: islandNetworkAddressSpace - TODO - Confirm this is not needed
     networkRules: [
       {
         name: 'island-networking-config'

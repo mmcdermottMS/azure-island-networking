@@ -19,7 +19,7 @@ var keyVaultUserMiName = '${resourcePrefix}-mi-kvSecretsUser'
 var networkContributorMiName = '${resourcePrefix}-mi-network-contributor'
 
 
-//az aks get-credentials --resource-group mrm-microsvcs-workload --name mrm-microsvcs-cus-aks
+//az aks get-credentials --resource-group msft-microsvcs-workload --name msft-microsvcs-cus-aks
 //kubectl apply -f aks-manifest.yaml
 //kubectl get service mrm-weather --watch
 //kubectl get events -n default
