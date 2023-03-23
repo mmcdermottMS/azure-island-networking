@@ -1,4 +1,5 @@
 param appSubnetId string
+param fullPrefix string
 param location string
 param resourcePrefix string
 param serviceRuntimeSubnetId string
@@ -8,10 +9,11 @@ resource springApps 'Microsoft.AppPlatform/Spring@2022-12-01' = {
   location: location
   properties: {
     networkProfile: {
-      appNetworkResourceGroup: '${resourcePrefix}-workload-spa-app'
+      appNetworkResourceGroup: '${fullPrefix}-workload-spa-app'
       appSubnetId: appSubnetId
-      serviceRuntimeNetworkResourceGroup: '${resourcePrefix}-workload-spa-svc'
+      serviceRuntimeNetworkResourceGroup: '${fullPrefix}-workload-spa-svc'
       serviceRuntimeSubnetId: serviceRuntimeSubnetId
+      serviceCidr: '10.0.0.0/16,10.2.0.0/16,10.3.0.1/16'
       outboundType: 'userDefinedRouting'
     }
   }

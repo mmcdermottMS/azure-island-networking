@@ -1,8 +1,8 @@
-param name string
+param resourcePrefix string
 param location string
 
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2020-08-01' = {
-  name: name
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+  name: '${resourcePrefix}-law'
   location: location
   properties: {
     retentionInDays: 30

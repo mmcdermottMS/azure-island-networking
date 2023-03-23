@@ -1,4 +1,5 @@
 param acrPullMiName string
+param dnsResourceGroupName string
 param dockerImageAndTag string
 param functionAppNameSuffix string
 param functionSpecificAppSettings array
@@ -6,7 +7,6 @@ param functionSubnetId string
 param keyVaultUserMiName string
 param location string
 param networkResourceGroupName string
-param dnsResourceGroupName string
 param resourcePrefix string
 param storageSkuName string
 param tags object
@@ -147,7 +147,7 @@ module privateEndpoint 'privateendpoint.bicep' = {
 // 'Deny', the deployment of the function app (with storage configuration) will fail.  So need to do the initial 
 // deployment of the storage account with networking open, then deploy the function app, then redeploy the same
 // storage account with networking locked down
-module networkLockedStorage 'storage.bicep' = {
+module networkLockedStorage 'storageAccount.bicep' = {
   name: '${timeStamp}-${functionAppNameSuffix}-lockedStorage'
   params: {
     defaultAction: 'Deny'
@@ -161,15 +161,14 @@ module networkLockedStorage 'storage.bicep' = {
   ]
 }
 
-var roleDefinitionID = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-var principalId = functionApp.identity.principalId
-var roleAssignmentName= guid(functionApp.id, roleDefinitionID, resourceGroup().id)
-
-resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01'= {
-  name: roleAssignmentName
+var roleDefinitionID = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' //Storage Blob Data Contributor - https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles
+resource storageRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(functionApp.id, roleDefinitionID, resourceGroup().id)
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', roleDefinitionID)
-    principalId: principalId
+    principalId: functionApp.identity.principalId
   }
   scope: storageAccount
 }
+
+output principalId string = functionApp.identity.principalId

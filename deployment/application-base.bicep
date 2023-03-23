@@ -116,7 +116,6 @@ module vnet 'modules/vnet.bicep' = {
         name: 'ehProducer'
         properties: {
           addressPrefix: ehProducerFaAddressPrefix
-          // TODO: Need to fix this, current route table prevents communications from function app to app insights
           routeTable: {
             id: route.outputs.id
           }
@@ -143,7 +142,6 @@ module vnet 'modules/vnet.bicep' = {
         name: 'ehConsumer'
         properties: {
           addressPrefix: ehConsumerFaAddressPrefix
-          // TODO: Need to fix this, current route table prevents communications from function app to app insights
           routeTable: {
             id: route.outputs.id
           }
@@ -170,7 +168,6 @@ module vnet 'modules/vnet.bicep' = {
         name: 'sbConsumer'
         properties: {
           addressPrefix: sbConsumerFaAddressPrefix
-          // TODO: Need to fix this, current route table prevents communications from function app to app insights
           routeTable: {
             id: route.outputs.id
           }
@@ -360,7 +357,7 @@ module utilServer 'modules/virtualMachine.bicep' = {
 }
 
 // Private DNS zone for other Azure services
-module privateZoneWebsites 'modules/dnszoneprivate.bicep' = {
+module privateZoneWebsites 'modules/dnsPrivateZone.bicep' = {
   name: '${timeStamp}-dns-private-azurewebsites'
   scope: resourceGroup(workloadDnsRg.name)
   params: {
@@ -383,7 +380,7 @@ module vnetAzureWebsitesZoneLink 'modules/dnszonelink.bicep' = {
 }
 
 // Private DNS zone for Azure Container Registry
-module privateZoneAcr 'modules/dnszoneprivate.bicep' = {
+module privateZoneAcr 'modules/dnsPrivateZone.bicep' = {
   name: '${timeStamp}-dns-private-acr'
   scope: resourceGroup(workloadDnsRg.name)
   params: {
@@ -406,7 +403,7 @@ module vnetAcrZoneLink 'modules/dnszonelink.bicep' = {
 }
 
 // Private DNS zone for Service Bus and Event Hubs
-module privateZoneServiceBus 'modules/dnszoneprivate.bicep' = {
+module privateZoneServiceBus 'modules/dnsPrivateZone.bicep' = {
   name: '${timeStamp}-dns-private-servicebus'
   scope: resourceGroup(workloadDnsRg.name)
   params: {
@@ -429,7 +426,7 @@ module vnetServiceBusZoneLink 'modules/dnszonelink.bicep' = {
 }
 
 // Private DNS zone for Key Vault
-module privateZoneKeyVault 'modules/dnszoneprivate.bicep' = {
+module privateZoneKeyVault 'modules/dnsPrivateZone.bicep' = {
   name: '${timeStamp}-dns-private-keyvault'
   scope: resourceGroup(workloadDnsRg.name)
   params: {
@@ -452,7 +449,7 @@ module vnetKeyVaultZoneLink 'modules/dnszonelink.bicep' = {
 }
 
 // Private DNS zone for Cosmos DB
-module privateZoneCosmos 'modules/dnszoneprivate.bicep' = {
+module privateZoneCosmos 'modules/dnsPrivateZone.bicep' = {
   name: '${timeStamp}-dns-private-acdb'
   scope: resourceGroup(workloadDnsRg.name)
   params: {

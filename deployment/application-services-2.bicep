@@ -1,3 +1,4 @@
+param corePrefix string
 param timeStamp string = utcNow('yyyyMMddHHmm')
 param orgPrefix string
 param appPrefix string
@@ -30,11 +31,18 @@ var networkContributorMiName = '${resourcePrefix}-mi-network-contributor'
 //NOTE: This is set to false for ease of testing and rapid iteration on changes.  For real workloads this should be set to true
 var enableSoftDeleteForKeyVault = false
 
-module monitoring 'Modules/monitoring.bicep' = {
-  name: '${timeStamp}-monitoring'
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = {
+  name: '${orgPrefix}-core-${regionCode}-law'
+  scope: resourceGroup('${orgPrefix}-${corePrefix}-monitoring')
+}
+
+module appInsights 'modules/appInsights.bicep' = {
+  name: '${timeStamp}-ai'
   params: {
     location: location
+    logAnalyticsId: logAnalytics.id
     resourcePrefix: resourcePrefix
+    tags: tags
   }
 }
 
@@ -92,15 +100,17 @@ module networkRoleAssignment 'modules/roleAssignment.bicep' = {
   scope: resourceGroup(networkResourceGroupName)
   params: {
     principalId: networkContributorMi.outputs.principalId
+    roleDefinitionId: '4d97b98b-1d4f-4787-a291-c67834d212e7' //network contributor
   }
 }
 
 module aks 'modules/aks.bicep' = {
   name: '${timeStamp}-aks'
   params: {
+    fullPrefix: fullPrefix
     location: location
     networkContributorMiName: networkContributorMiName
-    privateLinkServiceIp: '192.168.64.4' //TODO: migrate this to the parameters file
+    //privateLinkServiceIp: '192.168.64.4' //TODO: migrate this to the parameters file
     resourcePrefix: resourcePrefix
     subnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${fullPrefix}-network/providers/Microsoft.Network/virtualNetworks/${resourcePrefix}-workload/subnets/aks'
     tags: tags

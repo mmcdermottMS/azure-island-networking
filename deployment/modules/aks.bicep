@@ -1,9 +1,10 @@
 //param acrPullMiName string
 //param keyVaultUserMiName string
+param fullPrefix string
 param linuxAdminUsername string = 'adminUser'
 param location string
 param networkContributorMiName string
-param privateLinkServiceIp string
+//param privateLinkServiceIp string
 param resourcePrefix string
 param subnetId string
 param tags object
@@ -38,7 +39,7 @@ resource aks 'Microsoft.ContainerService/managedClusters@2022-07-01' = {
         osSKU: 'Ubuntu'
       }
     ]
-    nodeResourceGroup: '${resourcePrefix}-aks-node'
+    nodeResourceGroup: '${fullPrefix}-workload-aks-node'
     linuxProfile: {
       adminUsername: linuxAdminUsername
       ssh: {

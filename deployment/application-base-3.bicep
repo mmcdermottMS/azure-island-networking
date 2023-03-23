@@ -106,7 +106,7 @@ module vnet 'modules/vnet.bicep' = {
             id: appNsg.outputs.id
           }
           routeTable: {
-            id: route.outputs.id
+            id: spaAppRoute.outputs.id
           }
         }
       }
@@ -138,8 +138,7 @@ module vnet 'modules/vnet.bicep' = {
   }
 }
 
-//TODO: This route table isn't quite right, but allows for communcation to app insights.  Using for now until we figure out how to route AI
-// traffic correctly through the firewall
+
 module route 'modules/udr.bicep' = {
   name: '${timeStamp}-udr'
   scope: resourceGroup(workloadNetworkRg.name)
@@ -148,24 +147,9 @@ module route 'modules/udr.bicep' = {
     location: region
     routes: [
       {
-        name: '${resourcePrefix}-egress'
+        name: 'default-egress'
         properties: {
           addressPrefix: '0.0.0.0/0'
-          nextHopType: 'Internet'
-        }
-      }
-      {
-        name: '${resourcePrefix}-hub'
-        properties: {
-          addressPrefix: '192.168.0.0/16'
-          nextHopType: 'VirtualAppliance'
-          nextHopIpAddress: bridgeAzFw.properties.ipConfigurations[0].properties.privateIPAddress
-        }
-      }
-      {
-        name: '${resourcePrefix}-island'
-        properties: {
-          addressPrefix: '10.0.0.0/8'
           nextHopType: 'VirtualAppliance'
           nextHopIpAddress: bridgeAzFw.properties.ipConfigurations[0].properties.privateIPAddress
         }
@@ -174,8 +158,6 @@ module route 'modules/udr.bicep' = {
   }
 }
 
-//TODO: This route table isn't quite right, but allows for communcation to app insights.  Using for now until we figure out how to route AI
-// traffic correctly through the firewall
 module spaRuntimeRoute 'modules/udr.bicep' = {
   name: '${timeStamp}-spa-runtime-udr'
   scope: resourceGroup(workloadNetworkRg.name)
@@ -184,24 +166,28 @@ module spaRuntimeRoute 'modules/udr.bicep' = {
     location: region
     routes: [
       {
-        name: '${resourcePrefix}-egress'
+        name: 'default-egress'
         properties: {
           addressPrefix: '0.0.0.0/0'
-          nextHopType: 'Internet'
-        }
-      }
-      {
-        name: '${resourcePrefix}-hub'
-        properties: {
-          addressPrefix: '192.168.0.0/16'
           nextHopType: 'VirtualAppliance'
           nextHopIpAddress: bridgeAzFw.properties.ipConfigurations[0].properties.privateIPAddress
         }
       }
+    ]
+  }
+}
+
+module spaAppRoute 'modules/udr.bicep' = {
+  name: '${timeStamp}-spa-app-udr'
+  scope: resourceGroup(workloadNetworkRg.name)
+  params: {
+    name: '${resourcePrefix}-spa-app-udr'
+    location: region
+    routes: [
       {
-        name: '${resourcePrefix}-island'
+        name: 'default-egress'
         properties: {
-          addressPrefix: '10.0.0.0/8'
+          addressPrefix: '0.0.0.0/0'
           nextHopType: 'VirtualAppliance'
           nextHopIpAddress: bridgeAzFw.properties.ipConfigurations[0].properties.privateIPAddress
         }
@@ -356,7 +342,7 @@ module utilServer 'modules/virtualMachine.bicep' = {
 }
 
 // Private DNS zone for other Azure services
-module privateZoneWebsites 'modules/dnszoneprivate.bicep' = {
+module privateZoneWebsites 'modules/dnsPrivateZone.bicep' = {
   name: '${timeStamp}-dns-private-azurewebsites'
   scope: resourceGroup(workloadDnsRg.name)
   params: {
@@ -379,7 +365,7 @@ module vnetAzureWebsitesZoneLink 'modules/dnszonelink.bicep' = {
 }
 
 // Private DNS zone for Azure Container Registry
-module privateZoneAcr 'modules/dnszoneprivate.bicep' = {
+module privateZoneAcr 'modules/dnsPrivateZone.bicep' = {
   name: '${timeStamp}-dns-private-acr'
   scope: resourceGroup(workloadDnsRg.name)
   params: {
@@ -402,7 +388,7 @@ module vnetAcrZoneLink 'modules/dnszonelink.bicep' = {
 }
 
 // Private DNS zone for Key Vault
-module privateZoneKeyVault 'modules/dnszoneprivate.bicep' = {
+module privateZoneKeyVault 'modules/dnsPrivateZone.bicep' = {
   name: '${timeStamp}-dns-private-keyvault'
   scope: resourceGroup(workloadDnsRg.name)
   params: {
@@ -425,7 +411,7 @@ module vnetKeyVaultZoneLink 'modules/dnszonelink.bicep' = {
 }
 
 // Private DNS zone for Cosmos DB
-module privateZoneCosmos 'modules/dnszoneprivate.bicep' = {
+module privateZoneCosmos 'modules/dnsPrivateZone.bicep' = {
   name: '${timeStamp}-dns-private-acdb'
   scope: resourceGroup(workloadDnsRg.name)
   params: {

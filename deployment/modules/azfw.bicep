@@ -1,3 +1,4 @@
+param applicationRules array = []
 param prefix string
 param location string = resourceGroup().location
 param hubVnetName string
@@ -23,6 +24,7 @@ resource fwl 'Microsoft.Network/azureFirewalls@2020-06-01' = {
   name: '${prefix}-azfw'
   location: location
   properties: {
+    applicationRuleCollections: ((!empty(applicationRules)) ? applicationRules : null)
     ipConfigurations: [
       {
         name: '${prefix}-azfw-ipconf'
@@ -36,9 +38,9 @@ resource fwl 'Microsoft.Network/azureFirewalls@2020-06-01' = {
         }
       }
     ]
-    networkRuleCollections: ( (!empty(networkRules)) ? networkRules : null )
+    networkRuleCollections: ((!empty(networkRules)) ? networkRules : null)
     additionalProperties: {
-      'Network.SNAT.PrivateRanges': ( (!empty(privateTrafficPrefixes)) ? privateTrafficPrefixes : 'IANAPrivateRanges' )
+      'Network.SNAT.PrivateRanges': ((!empty(privateTrafficPrefixes)) ? privateTrafficPrefixes : 'IANAPrivateRanges')
     }
   }
 }
