@@ -1,4 +1,4 @@
-param allowedPrincipalIds array = []
+param principalIdDetails array = []
 param location string
 param networkResourceGroupName string
 param dnsResourceGroupName string
@@ -21,11 +21,12 @@ resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2022-05-15' = {
   }
 }
 
+var cosmosCustomRoleName = guid(cosmos.id)
 resource cosmosCustomRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions@2022-11-15' = {
   parent: cosmos
-  name: 'cosmosdb-sql-role-definition'
+  name: cosmosCustomRoleName
   properties: {
-    roleName: 'cosmosdb-sql-role-definition'
+    roleName: cosmosCustomRoleName
     type: 'CustomRole'
     assignableScopes: [
       cosmos.id
@@ -42,12 +43,12 @@ resource cosmosCustomRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefiniti
   }
 }
 
-resource accountName_readWriteRoleAssignmentId 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2022-11-15' = [for principalId in allowedPrincipalIds: {
+resource roleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2022-11-15' = [for principalIdDetail in principalIdDetails: {
   parent: cosmos
-  name: 'custom-role-assignment-${substring(uniqueString(principalId), 0, 8)})'
+  name: principalIdDetail.name
   properties: {
     roleDefinitionId: cosmosCustomRole.id
-    principalId: principalId
+    principalId: principalIdDetail.principalId
     scope: cosmos.id
   }
 }]

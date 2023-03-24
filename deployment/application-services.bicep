@@ -139,9 +139,14 @@ module serviceBus 'Modules/serviceBus.bicep' = {
 module cosmos 'Modules/cosmos.bicep' = {
   name: '${timeStamp}-cosmos'
   params: {
-    allowedPrincipalIds: [
+    principalIdDetails: [ //These system assigned managed identities will be granted the appropriate roles on the Cosmos DB account
       {
+        name: guid(ehProducerFunction.outputs.principalId)
         principalId: ehProducerFunction.outputs.principalId
+      }
+      {
+        name: guid(sbConsumerFunction.outputs.principalId)
+        principalId: sbConsumerFunction.outputs.principalId
       }
     ]
     location: location
