@@ -185,11 +185,19 @@ module ehProducerFunction 'Modules/functionApp.bicep' = {
         value: 'https://${resourcePrefix}-acdb.documents.azure.com:443'
       }
       {
-        name: 'ServiceBusConnection__fullyQualifiedNamespace'
-        value: '${resourcePrefix}-sbns.servicebus.windows.net'
+        name: 'CosmosAuthToken'
+        value: ''
       }
       {
-        name: 'QueueName'
+        name: 'CosmosInitialAutoscaleThroughput'
+        value: '20000'
+      }
+      {
+        name: 'EhNameSpace'
+        value: '${resourcePrefix}-ehns.servicebus.windows.net'
+      }
+      {
+        name: 'EhName'
         value: entities[0]
       }
     ]
@@ -311,19 +319,11 @@ module sbConsumerFunction 'Modules/functionApp.bicep' = {
         value: 'https://${resourcePrefix}-acdb.documents.azure.com:443'
       }
       {
-        name: 'CosmosAuthToken' //TODO: Wire this to KV
-        value: ''
+        name: 'ServiceBusConnection__fullyQualifiedNamespace'
+        value: '${resourcePrefix}-sbns.servicebus.windows.net'
       }
       {
-        name: 'CosmosInitialAutoscaleThroughput'
-        value: '20000'
-      }
-      {
-        name: 'EhNameSpace'
-        value: '${resourcePrefix}-ehns.servicebus.windows.net'
-      }
-      {
-        name: 'EhName'
+        name: 'QueueName'
         value: entities[0]
       }
       {

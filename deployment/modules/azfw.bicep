@@ -1,6 +1,6 @@
 param applicationRules array = []
 param prefix string
-param location string = resourceGroup().location
+param location string
 param hubVnetName string
 param networkRules array = []
 
