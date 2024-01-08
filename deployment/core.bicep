@@ -188,7 +188,7 @@ module bridge01Vnet 'modules/vnet.bicep' = {
         properties: {
           addressPrefix: bridgePrivateLinkSubnetAddressSpace
           networkSecurityGroup: {
-            id: (deployBridge ? bridgePrivateLinkNsg.outputs.id : null ) 
+            id: (deployBridge ? bridgePrivateLinkNsg.outputs.id : null)
           }
         }
       }
@@ -502,7 +502,7 @@ module bastionNsg 'modules/nsg.bicep' = {
 }
 
 // NSG for Azure services configured with Private Link (bridge)
-module bridgePrivateLinkNsg 'modules/nsg.bicep' = if(deployBridge) {
+module bridgePrivateLinkNsg 'modules/nsg.bicep' = if (deployBridge) {
   name: '${timeStamp}-bridge-privatelinks'
   scope: resourceGroup(netrg.name)
   params: {
@@ -540,7 +540,7 @@ module bridgePrivateLinkNsg 'modules/nsg.bicep' = if(deployBridge) {
 }
 
 // NSG for App Gateway subnet (private build servers)
-module bridgeAppGatewayNsg 'modules/nsg.bicep' = if(deployBridge) {
+module bridgeAppGatewayNsg 'modules/nsg.bicep' = if (deployBridge) {
   name: '${timeStamp}-bridge-appgw'
   scope: resourceGroup(netrg.name)
   dependsOn: [
@@ -739,14 +739,14 @@ module hubAzFw 'modules/azfw.bicep' = {
 }
 
 // Azure Firewall - BRIDGE
-module bridgeAzFw 'modules/azfw.bicep' = if(deployBridge) {
+module bridgeAzFw 'modules/azfw.bicep' = if (deployBridge) {
   name: '${timeStamp}-bridge01-azfw'
   scope: resourceGroup(netrg.name)
   params: {
     prefix: '${resourcePrefix}-bridge01'
     fireWallSubnetName: 'AzureFirewallSubnet'
     location: region
-    hubVnetName: (deployBridge ? bridge01Vnet.outputs.name : '' )   
+    hubVnetName: (deployBridge ? bridge01Vnet.outputs.name : '')
     networkRules: [
       {
         name: 'island-networking-config'
@@ -1291,21 +1291,21 @@ module SpokeToHubPeering 'modules/peering.bicep' = {
   }
 }
 
-module HubToBridgePeering 'modules/peering.bicep' = if(deployBridge) {
+module HubToBridgePeering 'modules/peering.bicep' = if (deployBridge) {
   name: '${timeStamp}-hub-to-bridge01-peering'
   scope: resourceGroup(netrg.name)
   params: {
     localVnetName: hubVnet.outputs.name
     remoteVnetName: 'bridge01'
-    remoteVnetId: (deployBridge ? bridge01Vnet.outputs.id : '' )
+    remoteVnetId: (deployBridge ? bridge01Vnet.outputs.id : '')
   }
 }
 
-module BridgeToHubPeering 'modules/peering.bicep' = if(deployBridge) {
+module BridgeToHubPeering 'modules/peering.bicep' = if (deployBridge) {
   name: '${timeStamp}-bridge01-to-hub-peering'
   scope: resourceGroup(netrg.name)
   params: {
-    localVnetName: ( deployBridge ? bridge01Vnet.outputs.name
+    localVnetName: (deployBridge ? bridge01Vnet.outputs.name : '')
     remoteVnetName: 'hub'
     remoteVnetId: hubVnet.outputs.id
   }
@@ -1325,7 +1325,7 @@ module bridge02ToHubPeering 'modules/peering.bicep' = {
   name: '${timeStamp}-bridge02-to-hub-peering'
   scope: resourceGroup(netrg.name)
   params: {
-    localVnetName: bridge02Vnet.outputs.name : '' ) 
+    localVnetName: (deployBridge ? bridge02Vnet.outputs.name : '')
     remoteVnetName: 'hub'
     remoteVnetId: hubVnet.outputs.id
   }
@@ -1352,7 +1352,7 @@ module route 'modules/udr.bicep' = {
 }
 
 // Force bridge traffic to the hub AZ FW private interface
-module bridgeRoute 'modules/udr.bicep' = if(deployBridge) {
+module bridgeRoute 'modules/udr.bicep' = if (deployBridge) {
   name: '${timeStamp}-bridge-udr'
   scope: resourceGroup(netrg.name)
   params: {
@@ -1383,7 +1383,7 @@ module bastion 'modules/bastion.bicep' = {
   name: 'bridge-bastion'
   scope: resourceGroup(netrg.name)
   params: {
-    name: '${resourcePrefix}-bastion'
+    prefix: resourcePrefix
     location: region
     subnetId: '${spokeVnet.outputs.id}/subnets/AzureBastionSubnet'
     sku: 'Basic'
@@ -1546,16 +1546,16 @@ module hubVnetSqlZoneLink 'modules/dnszonelink.bicep' = {
   }
 }
 
-module privateZoneKeyVault 'modules/dnszoneprivate.bicep' = {
-  name: 'dns-private-keyvault'
+module privateZoneKeyVault 'modules/dnsPrivateZone.bicep' = {
+  name: '${timeStamp}-dns-private-keyvault'
   scope: resourceGroup(dnsrg.name)
   params: {
     zoneName: 'privatelink.vaultcore.azure.net'
   }
 }
 
-module vnetKeyVaultZoneLink 'modules/dnszonelink.bicep' = {
-  name: 'dns-link-keyvault-spoke'
+module spokeVnetKeyVaultZoneLink 'modules/dnszonelink.bicep' = {
+  name: '${timeStamp}-dns-link-keyvault-spokevnet'
   scope: resourceGroup(dnsrg.name)
   dependsOn: [
     privateZoneKeyVault
@@ -1563,6 +1563,20 @@ module vnetKeyVaultZoneLink 'modules/dnszonelink.bicep' = {
   params: {
     vnetName: spokeVnet.outputs.name
     vnetId: spokeVnet.outputs.id
+    zoneName: 'privatelink.vaultcore.azure.net'
+    autoRegistration: false
+  }
+}
+
+module hubVnetKeyVaultZoneLink 'modules/dnszonelink.bicep' = {
+  name: '${timeStamp}-dns-link-keyvault-hubvnet'
+  scope: resourceGroup(dnsrg.name)
+  dependsOn: [
+    privateZoneKeyVault
+  ]
+  params: {
+    vnetName: hubVnet.outputs.name
+    vnetId: hubVnet.outputs.id
     zoneName: 'privatelink.vaultcore.azure.net'
     autoRegistration: false
   }

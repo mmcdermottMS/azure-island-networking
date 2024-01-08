@@ -1,6 +1,6 @@
 param prefix string
 param subnetId string
-param location string = resourceGroup().location
+param location string
 
 @allowed([
   'Basic'
