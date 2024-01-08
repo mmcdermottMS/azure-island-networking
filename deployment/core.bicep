@@ -16,10 +16,13 @@ param regionCode string
 param timeStamp string = utcNow('yyyyMMddHHmm')
 param tags object = {}
 
+// Optional services
+param deployBridge bool = false
+param deployVnetGateway bool = false
+
 var resourcePrefix = '${orgPrefix}-${appPrefix}-${regionCode}'
 
 // DNS Server
-// DevOps Build Server
 param vmAdminUserName string = 'vmadmin'
 
 @secure()
@@ -31,6 +34,7 @@ param hubFirewallSubnetAddressSpace string = '10.10.0.0/25' // 123 addresses - 1
 param hubDnsSubnetAddressSpace string = '10.10.0.128/25' // 123 addresses - 10.10.0.128 - 10.10.1.255
 param hubDnsResolverOutboundSubnetAddressSpace string = '10.10.1.0/26' // 59 addresses - 10.10.1.0 - 10.10.1.63
 param hubServicesSubnetAddressSpace string = '10.10.1.64/26' // 59 addresses - 10.10.1.64 - 10.10.1.127
+param hubGatewaySubnetAddressSpace string = '10.10.1.128/26' // 59 addresses
 
 // BRIDGE VNET IP SETTINGS
 param bridgeVnetAddressSpace string = '10.10.16.0/20'
@@ -44,6 +48,7 @@ param spokeVnetAddressSpace string = '10.10.32.0/20'
 param spokeVnetVmAddressSpace string = '10.10.32.0/25' // 123 addresses - 10.10.32.0 - 10.10.32.127
 param spokeVnetPrivateLinkAddressSpace string = '10.10.32.128/25' // 123 addresses - 10.10.32.128 - 10.10.32.255
 param spokeVnetIntegrationSubnetAddressSpace string = '10.10.33.0/25' // 123 addresses - 10.10.33.0 - 10.10.33.127
+param spokeAzureBastionSubnetAddressSpace string = '10.10.34.0/26' // 59 addresses -10.10.34.0 - 10.10.34.63
 
 // SECOND BRIDGE VNET IP SETTINGS
 param bridge02VnetAddressSpace string = '10.10.64.0/20'
@@ -139,6 +144,12 @@ module hubVnet 'modules/vnet.bicep' = {
           }
         }
       }
+      {
+        name: 'GatewaySubnet'
+        properties: {
+          addressPrefix: hubGatewaySubnetAddressSpace
+        }
+      }
     ]
   }
 }
@@ -158,7 +169,7 @@ module bridge01Vnet 'modules/vnet.bicep' = {
         properties: {
           addressPrefix: bridgeFirewallSubnetAddressSpace
           routeTable: {
-            id: bridgeRoute.outputs.id
+            id: (deployBridge ? bridgeRoute.outputs.id : null)
           }
         }
       }
@@ -168,7 +179,7 @@ module bridge01Vnet 'modules/vnet.bicep' = {
         properties: {
           addressPrefix: bridgeBastionSubnetAddressSpace
           networkSecurityGroup: {
-            id: bastionNsg.outputs.id
+            id: (deployBridge ? bastionNsg.outputs.id : '')
           }
         }
       }
@@ -177,7 +188,7 @@ module bridge01Vnet 'modules/vnet.bicep' = {
         properties: {
           addressPrefix: bridgePrivateLinkSubnetAddressSpace
           networkSecurityGroup: {
-            id: bridgePrivateLinkNsg.outputs.id
+            id: (deployBridge ? bridgePrivateLinkNsg.outputs.id : null ) 
           }
         }
       }
@@ -186,13 +197,12 @@ module bridge01Vnet 'modules/vnet.bicep' = {
         properties: {
           addressPrefix: bridgeAppGatewaySubnetAddressSpace
           networkSecurityGroup: {
-            id: bridgeAppGatewayNsg.outputs.id
+            id: (deployBridge ? bridgeAppGatewayNsg.outputs.id : '')
           }
         }
       }
     ]
   }
-
 }
 
 module bridge02Vnet 'modules/vnet.bicep' = {
@@ -244,6 +254,7 @@ module bridge02Vnet 'modules/vnet.bicep' = {
       }
     ]
   }
+
 }
 
 module spokeVnet 'modules/vnet.bicep' = {
@@ -257,7 +268,7 @@ module spokeVnet 'modules/vnet.bicep' = {
     ]
     subnets: [
       {
-        name: 'iaas'
+        name: 'compute'
         properties: {
           addressPrefix: spokeVnetVmAddressSpace
           routeTable: {
@@ -269,7 +280,7 @@ module spokeVnet 'modules/vnet.bicep' = {
         }
       }
       {
-        name: 'privatelink'
+        name: 'services'
         properties: {
           addressPrefix: spokeVnetPrivateLinkAddressSpace
           routeTable: {
@@ -282,24 +293,25 @@ module spokeVnet 'modules/vnet.bicep' = {
         }
       }
       {
-        name: 'funcintegration'
+        name: 'integration'
         properties: {
           addressPrefix: spokeVnetIntegrationSubnetAddressSpace
-          delegations: [
-            {
-              name: 'delegation'
-              properties: {
-                serviceName: 'Microsoft.Web/serverfarms'
-              }
-            }
-          ]
           privateEndpointNetworkPolicies: 'Enabled'
           routeTable: {
             id: route.outputs.id
           }
           networkSecurityGroup: {
-            id: spokeFuncIntegrationNsg.outputs.id
+            id: spokeIntegrationNsg.outputs.id
           }
+        }
+      }
+      {
+        name: 'AzureBastionSubnet'
+        properties: {
+          addressPrefix: spokeAzureBastionSubnetAddressSpace
+        }
+        networkSecurityGroup: {
+          id: bastionNsg.outputs.id
         }
       }
     ]
@@ -490,7 +502,7 @@ module bastionNsg 'modules/nsg.bicep' = {
 }
 
 // NSG for Azure services configured with Private Link (bridge)
-module bridgePrivateLinkNsg 'modules/nsg.bicep' = {
+module bridgePrivateLinkNsg 'modules/nsg.bicep' = if(deployBridge) {
   name: '${timeStamp}-bridge-privatelinks'
   scope: resourceGroup(netrg.name)
   params: {
@@ -528,7 +540,7 @@ module bridgePrivateLinkNsg 'modules/nsg.bicep' = {
 }
 
 // NSG for App Gateway subnet (private build servers)
-module bridgeAppGatewayNsg 'modules/nsg.bicep' = {
+module bridgeAppGatewayNsg 'modules/nsg.bicep' = if(deployBridge) {
   name: '${timeStamp}-bridge-appgw'
   scope: resourceGroup(netrg.name)
   dependsOn: [
@@ -564,7 +576,7 @@ module spokeVirtualMachinesNsg 'modules/nsg.bicep' = {
     location: region
     securityRules: [
       {
-        name: 'allow-inbound-ssh'
+        name: 'allow-inbound-vm-admin'
         properties: {
           priority: 100
           protocol: '*'
@@ -575,6 +587,7 @@ module spokeVirtualMachinesNsg 'modules/nsg.bicep' = {
           destinationAddressPrefix: '*'
           destinationPortRanges: [
             '22'
+            '3389'
           ]
         }
       }
@@ -601,11 +614,11 @@ module spokeVirtualMachinesNsg 'modules/nsg.bicep' = {
 }
 
 // NSG for Azure Functions subnet
-module spokeFuncIntegrationNsg 'modules/nsg.bicep' = {
-  name: '${timeStamp}-spoke-functions-nsg'
+module spokeIntegrationNsg 'modules/nsg.bicep' = {
+  name: '${timeStamp}-spoke-integration-nsg'
   scope: resourceGroup(netrg.name)
   params: {
-    name: '${resourcePrefix}-spoke-functions'
+    name: '${resourcePrefix}-spoke-integration'
     location: region
     securityRules: [
       {
@@ -630,7 +643,7 @@ module spokePrivateLinkNsg 'modules/nsg.bicep' = {
   name: '${timeStamp}-spoke-privatelinks'
   scope: resourceGroup(netrg.name)
   dependsOn: [
-    spokeFuncIntegrationNsg
+    spokeIntegrationNsg
   ]
   params: {
     name: '${resourcePrefix}-spoke-privatelinks'
@@ -726,14 +739,14 @@ module hubAzFw 'modules/azfw.bicep' = {
 }
 
 // Azure Firewall - BRIDGE
-module bridgeAzFw 'modules/azfw.bicep' = {
+module bridgeAzFw 'modules/azfw.bicep' = if(deployBridge) {
   name: '${timeStamp}-bridge01-azfw'
   scope: resourceGroup(netrg.name)
   params: {
     prefix: '${resourcePrefix}-bridge01'
     fireWallSubnetName: 'AzureFirewallSubnet'
     location: region
-    hubVnetName: bridge01Vnet.outputs.name
+    hubVnetName: (deployBridge ? bridge01Vnet.outputs.name : '' )   
     networkRules: [
       {
         name: 'island-networking-config'
@@ -1278,21 +1291,21 @@ module SpokeToHubPeering 'modules/peering.bicep' = {
   }
 }
 
-module HubToBridgePeering 'modules/peering.bicep' = {
+module HubToBridgePeering 'modules/peering.bicep' = if(deployBridge) {
   name: '${timeStamp}-hub-to-bridge01-peering'
   scope: resourceGroup(netrg.name)
   params: {
     localVnetName: hubVnet.outputs.name
     remoteVnetName: 'bridge01'
-    remoteVnetId: bridge01Vnet.outputs.id
+    remoteVnetId: (deployBridge ? bridge01Vnet.outputs.id : '' )
   }
 }
 
-module BridgeToHubPeering 'modules/peering.bicep' = {
+module BridgeToHubPeering 'modules/peering.bicep' = if(deployBridge) {
   name: '${timeStamp}-bridge01-to-hub-peering'
   scope: resourceGroup(netrg.name)
   params: {
-    localVnetName: bridge01Vnet.outputs.name
+    localVnetName: ( deployBridge ? bridge01Vnet.outputs.name
     remoteVnetName: 'hub'
     remoteVnetId: hubVnet.outputs.id
   }
@@ -1312,7 +1325,7 @@ module bridge02ToHubPeering 'modules/peering.bicep' = {
   name: '${timeStamp}-bridge02-to-hub-peering'
   scope: resourceGroup(netrg.name)
   params: {
-    localVnetName: bridge02Vnet.outputs.name
+    localVnetName: bridge02Vnet.outputs.name : '' ) 
     remoteVnetName: 'hub'
     remoteVnetId: hubVnet.outputs.id
   }
@@ -1339,7 +1352,7 @@ module route 'modules/udr.bicep' = {
 }
 
 // Force bridge traffic to the hub AZ FW private interface
-module bridgeRoute 'modules/udr.bicep' = {
+module bridgeRoute 'modules/udr.bicep' = if(deployBridge) {
   name: '${timeStamp}-bridge-udr'
   scope: resourceGroup(netrg.name)
   params: {
@@ -1365,25 +1378,15 @@ module bridgeRoute 'modules/udr.bicep' = {
   }
 }
 
-// Bastion for first bridge
+// Bastion
 module bastion 'modules/bastion.bicep' = {
-  name: '${timeStamp}-bridge01-bastion'
+  name: 'bridge-bastion'
   scope: resourceGroup(netrg.name)
   params: {
-    prefix: '${resourcePrefix}-bridge01'
+    name: '${resourcePrefix}-bastion'
     location: region
-    subnetId: '${bridge01Vnet.outputs.id}/subnets/AzureBastionSubnet'
-  }
-}
-
-// Bastion for the second bridge
-module bastion2 'modules/bastion.bicep' = {
-  name: '${timeStamp}-bridge02-bastion'
-  scope: resourceGroup(netrg.name)
-  params: {
-    prefix: '${resourcePrefix}-bridge02'
-    location: region
-    subnetId: '${bridge02Vnet.outputs.id}/subnets/AzureBastionSubnet'
+    subnetId: '${spokeVnet.outputs.id}/subnets/AzureBastionSubnet'
+    sku: 'Basic'
   }
 }
 
@@ -1543,6 +1546,28 @@ module hubVnetSqlZoneLink 'modules/dnszonelink.bicep' = {
   }
 }
 
+module privateZoneKeyVault 'modules/dnszoneprivate.bicep' = {
+  name: 'dns-private-keyvault'
+  scope: resourceGroup(dnsrg.name)
+  params: {
+    zoneName: 'privatelink.vaultcore.azure.net'
+  }
+}
+
+module vnetKeyVaultZoneLink 'modules/dnszonelink.bicep' = {
+  name: 'dns-link-keyvault-spoke'
+  scope: resourceGroup(dnsrg.name)
+  dependsOn: [
+    privateZoneKeyVault
+  ]
+  params: {
+    vnetName: spokeVnet.outputs.name
+    vnetId: spokeVnet.outputs.id
+    zoneName: 'privatelink.vaultcore.azure.net'
+    autoRegistration: false
+  }
+}
+
 // Private DNS zone for other Azure services
 module privateZoneAzure 'modules/dnsPrivateZone.bicep' = {
   name: '${timeStamp}-dns-private-azure'
@@ -1553,7 +1578,7 @@ module privateZoneAzure 'modules/dnsPrivateZone.bicep' = {
 }
 
 // Link the spoke VNet to the privatelink.azure.com private zone
-// NOTE: See: https://stackoverflow.com/questions/64725413/azure-bastion-and-private-link-in-the-same-virtual-network-access-to-virtual-ma
+// NOTE: See: https://learn.microsoft.com/en-us/azure/bastion/bastion-faq#my-privatelinkazurecom-cant-resolve-to-managementprivatelinkazurecom
 // Must add CNAME record for 'management.privatelink.azure.com' that points to 'arm-frontdoor-prod.trafficmanager.net'
 module frontdoorcname 'modules/dnscname.bicep' = {
   name: '${timeStamp}-frontdoor-cname'
@@ -1564,7 +1589,8 @@ module frontdoorcname 'modules/dnscname.bicep' = {
   params: {
     appName: 'management'
     dnsZone: 'privatelink.azure.com'
-    alias: 'arm-frontdoor-prod.${environment().suffixes.azureFrontDoorEndpointSuffix}'
+    #disable-next-line no-hardcoded-env-urls
+    alias: 'arm-frontdoor-prod.trafficmanager.net'
   }
 }
 
@@ -1657,6 +1683,32 @@ module applyHubRoutes 'modules/vnet.bicep' = {
   }
 }
 
+// Public IP for the VNET Gateway
+module vnetGatewayPublicIp 'modules/publicIpAddress.bicep' = if (deployVnetGateway) {
+  name: 'vnet-gateway-pip'
+  scope: resourceGroup(netrg.name)
+  params: {
+    resourceName: '${resourcePrefix}-vnet-gateway-pip'
+    location: region
+    publicIpAddressSku: 'Standard'
+    publicIpAddressType: 'Static'
+  }
+}
+
+// VNET Gateway
+module vnetGateway 'modules/vnetGateway.bicep' = if (deployVnetGateway) {
+  name: 'vnet-gateway'
+  scope: resourceGroup(netrg.name)
+  dependsOn: [
+    hubVnet
+  ]
+  params: {
+    name: '${resourcePrefix}-vnet-gateway'
+    location: region
+    subnetId: '${hubVnet.outputs.id}/subnets/GatewaySubnet'
+  }
+}
+
 // DNS server for contoso.com
 module dnsServer 'modules/virtualMachine.bicep' = {
   name: '${timeStamp}-dns-server-consoso-com'
@@ -1673,7 +1725,7 @@ module dnsServer 'modules/virtualMachine.bicep' = {
     subnetName: 'dns'
     os: 'linux'
     vmName: '${resourcePrefix}-dns01'
-    vmSize: 'Standard_B2ms'
+    vmSize: 'Standard_B2as_v2'
     initScriptBase64: loadFileAsBase64('dnsserver.yml')
   }
 }
@@ -1747,10 +1799,10 @@ module webServer 'modules/virtualMachine.bicep' = {
     networkResourceGroupName: netrg.name
     location: region
     vnetName: spokeVnet.outputs.name
-    subnetName: 'iaas'
+    subnetName: 'compute'
     os: 'linux'
     vmName: '${resourcePrefix}-web01'
-    vmSize: 'Standard_B2ms'
+    vmSize: 'Standard_B2as_v2'
     initScriptBase64: loadFileAsBase64('webserver.yml')
   }
 }

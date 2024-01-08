@@ -1,6 +1,12 @@
 param prefix string
 param subnetId string
-param location string
+param location string = resourceGroup().location
+
+@allowed([
+  'Basic'
+  'Standard'
+])
+param sku string = 'Basic'
 
 resource bastionIP 'Microsoft.Network/publicIPAddresses@2020-06-01' = {
   name: '${prefix}-bastion-ip'
@@ -9,9 +15,7 @@ resource bastionIP 'Microsoft.Network/publicIPAddresses@2020-06-01' = {
     publicIPAddressVersion: 'IPv4'
     publicIPAllocationMethod: 'Static'
   }
-  sku: {
-    name: 'Standard'
-  }
+  sku: { name: sku }
 }
 
 resource bastion 'Microsoft.Network/bastionHosts@2020-06-01' = {
@@ -19,14 +23,16 @@ resource bastion 'Microsoft.Network/bastionHosts@2020-06-01' = {
   location: location
   properties: {
     ipConfigurations: [
-      { name: 'bastionConf', properties: {
+      { 
+        name: 'bastionConf', properties: {
           subnet: {
             id: subnetId
           }
           publicIPAddress: {
             id: bastionIP.id
           }
-        } }
+        }
+      }
     ]
   }
 }
