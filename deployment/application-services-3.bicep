@@ -59,6 +59,7 @@ module vmPasswordSecret 'modules/keyVaultSecrent.bicep' = {
   }
 }
 
+//TODO: Standardize the approach on role assignments for networking components
 module networkRoleAssignment 'modules/roleAssignment.bicep' = {
   name: '${timeStamp}-network-owner-role-assignment'
   scope: resourceGroup(networkResourceGroupName)
@@ -76,5 +77,6 @@ module springApps 'modules/springApps.bicep' = {
     location: location
     resourcePrefix: resourcePrefix
     serviceRuntimeSubnetId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${fullPrefix}-network/providers/Microsoft.Network/virtualNetworks/${resourcePrefix}-workload/subnets/spa-runtime'
+    tags: tags
   }
 }

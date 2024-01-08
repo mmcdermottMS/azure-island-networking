@@ -19,7 +19,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2021-03-01' = {
   properties: {
     zoneRedundant: zoneRedundant
     reserved: serverOS == 'Linux'
-    maximumElasticWorkerCount: 20
+    maximumElasticWorkerCount: 100
   }
   sku: {
     name: skuName

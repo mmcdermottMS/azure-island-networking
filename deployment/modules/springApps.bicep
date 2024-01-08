@@ -3,6 +3,7 @@ param fullPrefix string
 param location string
 param resourcePrefix string
 param serviceRuntimeSubnetId string
+param tags object
 
 resource springApps 'Microsoft.AppPlatform/Spring@2022-12-01' = {
   name: '${resourcePrefix}-spa'
@@ -21,4 +22,5 @@ resource springApps 'Microsoft.AppPlatform/Spring@2022-12-01' = {
     name: 'S0'
     tier: 'Standard'
   }
+  tags: tags
 }
