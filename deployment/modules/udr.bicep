@@ -2,7 +2,7 @@ param name string
 param routes array
 param location string = resourceGroup().location
 
-resource route 'Microsoft.Network/routeTables@2020-06-01' = {
+resource route 'Microsoft.Network/routeTables@2022-09-01' = {
   name: name
   location: location
   properties: {

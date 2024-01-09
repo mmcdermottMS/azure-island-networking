@@ -1,10 +1,12 @@
+param acrPullMiName string
+param dnsResourceGroupName string
 param dockerImageAndTag string
 param functionAppNameSuffix string
 param functionSpecificAppSettings array
 param functionSubnetId string
+param keyVaultUserMiName string
 param location string
 param networkResourceGroupName string
-param dnsResourceGroupName string
 param resourcePrefix string
 param storageSkuName string
 param tags object
@@ -31,7 +33,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-08-01' existing 
 var storageConnString = 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${listKeys(storageAccount.id, storageAccount.apiVersion).keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
 
 module asp 'appServicePlan.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-${functionAppNameSuffix}-asp'
+  name: '${timeStamp}-${functionAppNameSuffix}-asp'
   params: {
     location: location
     resourcePrefix: resourcePrefix
@@ -90,10 +92,27 @@ var baseAppSettings = [
   }
 ]
 
+resource acrPullMi 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
+  name: acrPullMiName
+}
+
+resource keyVaultSecretsUserMi 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
+  name: keyVaultUserMiName
+}
+
 resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp,linux,container'
+  identity: {
+    type: 'SystemAssigned, UserAssigned'
+    userAssignedIdentities: {
+      '${acrPullMi.id}': {
+      }
+      '${keyVaultSecretsUserMi.id}': {
+      }
+    }
+  }
   properties: {
     serverFarmId: asp.outputs.resourceId
     httpsOnly: true
@@ -109,7 +128,7 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
 }
 
 module privateEndpoint 'privateendpoint.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-pe-${functionAppNameSuffix}'
+  name: '${timeStamp}-pe-${functionAppNameSuffix}'
   scope: resourceGroup(networkResourceGroupName)
   params: {
     location: location
@@ -124,12 +143,12 @@ module privateEndpoint 'privateendpoint.bicep' = {
   }
 }
 
-//TODO: This is a total hack.  If you initially deploy a function app's storage account with a default action of
+// HACK: This is a total hack.  If you initially deploy a function app's storage account with a default action of
 // 'Deny', the deployment of the function app (with storage configuration) will fail.  So need to do the initial 
 // deployment of the storage account with networking open, then deploy the function app, then redeploy the same
 // storage account with networking locked down
-module networkLockedStorage 'storage.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-${functionAppNameSuffix}-lockedStorage'
+module networkLockedStorage 'storageAccount.bicep' = {
+  name: '${timeStamp}-${functionAppNameSuffix}-lockedStorage'
   params: {
     defaultAction: 'Deny'
     location: location
@@ -141,3 +160,15 @@ module networkLockedStorage 'storage.bicep' = {
     functionApp
   ]
 }
+
+var roleDefinitionID = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' //Storage Blob Data Contributor - https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles
+resource storageRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(functionApp.id, roleDefinitionID, resourceGroup().id)
+  properties: {
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', roleDefinitionID)
+    principalId: functionApp.identity.principalId
+  }
+  scope: storageAccount
+}
+
+output principalId string = functionApp.identity.principalId

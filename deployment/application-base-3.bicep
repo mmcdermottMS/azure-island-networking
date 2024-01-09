@@ -60,34 +60,56 @@ resource utilRg 'Microsoft.Resources/resourceGroups@2020-06-01' = {
 }
 
 resource bridgeVnet 'Microsoft.Network/virtualNetworks@2022-05-01' existing = {
-  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge01'
+  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge02'
   scope: resourceGroup(coreNetworkRgName)
 }
 
 resource bridgeAzFw 'Microsoft.Network/azureFirewalls@2022-05-01' existing = {
-  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge01-azfw'
+  name: '${orgPrefix}-${corePrefix}-${regionCode}-bridge02-azfw'
   scope: resourceGroup(coreNetworkRgName)
 }
 
-// ISLAND VNET IP SETTINGS
-param islandVnetAddressSpace string = '192.168.0.0/18'
-param utilSubnetAddressPrefix string = '192.168.0.0/22'         // 1019 addresses - 192.168.4.0 - 192.168.8.0
-param privateEndpointAddressPrefix string = '192.168.4.0/24'    // 251  addresses - 192.168.8.0 - 192.168.9.0
-param ehProducerFaAddressPrefix string = '192.168.5.0/26'       // 61   addresses - 192.168.9.0 - 192.168.9.63
-param ehConsumerFaAddressPrefix string = '192.168.5.64/26'      // 61   addresses - 192.168.9.64 - 192.168.9.127
-param sbConsumerFaAddressPrefix string = '192.168.5.128/26'     // 61   addresses - 192.168.9.128 - 192.168.9.192
-
+param islandVnetAddressSpace string = '192.168.0.0/16'
+param spaRuntimeSubnetAddressPrefix string = '192.168.0.0/22'   // 1019 addresses - 192.168.0.0 - 192.168.4.0
+param spaAppsSubnetAddressPrefix string = '192.168.4.0/22'      // 1019 addresses - 192.168.4.0 - 192.168.8.0
+param utilSubnetAddressPrefix string = '192.168.8.0/24'         // 251  addresses - 192.168.8.0 - 192.168.9.0
+param privateEndpointAddressPrefix string = '192.168.9.0/24'    // 251  addresses - 192.168.9.0 - 192.168.10.0
 
 module vnet 'modules/vnet.bicep' = {
   name: '${timeStamp}-vnet'
   scope: resourceGroup(workloadNetworkRg.name)
   params: {
+    isForSpringApps: true
     vnetName: '${resourcePrefix}-workload'
     location: region
     addressSpaces: [
       islandVnetAddressSpace
     ]
     subnets: [
+      {
+        name: 'spa-runtime'
+        properties: {
+          addressPrefix: spaRuntimeSubnetAddressPrefix
+          networkSecurityGroup: {
+            id: runtimeNsg.outputs.id
+          }
+          routeTable: {
+            id: spaRuntimeRoute.outputs.id
+          }
+        }
+      }
+      {
+        name: 'spa-apps'
+        properties: {
+          addressPrefix: spaAppsSubnetAddressPrefix
+          networkSecurityGroup: {
+            id: appNsg.outputs.id
+          }
+          routeTable: {
+            id: spaAppRoute.outputs.id
+          }
+        }
+      }
       {
         name: 'util'
         properties: {
@@ -112,90 +134,11 @@ module vnet 'modules/vnet.bicep' = {
           }
         }
       }
-      {
-        name: 'ehProducer'
-        properties: {
-          addressPrefix: ehProducerFaAddressPrefix
-          routeTable: {
-            id: route.outputs.id
-          }
-          networkSecurityGroup: {
-            id: functionNsg.outputs.id
-          }
-          delegations: [
-            {
-              name: '${appPrefix}-asp-delegation-${substring(uniqueString(deployment().name), 0, 4)}'
-              properties: {
-                serviceName: 'Microsoft.Web/serverfarms'
-              }
-              type: 'Microsoft.Network/virtualNetworks/subnets/delegations'
-            }
-          ]
-          serviceENdpoints: [
-            {
-              service: 'Microsoft.Storage'
-            }
-          ]
-        }
-      }
-      {
-        name: 'ehConsumer'
-        properties: {
-          addressPrefix: ehConsumerFaAddressPrefix
-          routeTable: {
-            id: route.outputs.id
-          }
-          networkSecurityGroup: {
-            id: functionNsg.outputs.id
-          }
-          delegations: [
-            {
-              name: '${appPrefix}-asp-delegation-${substring(uniqueString(deployment().name), 0, 4)}'
-              properties: {
-                serviceName: 'Microsoft.Web/serverfarms'
-              }
-              type: 'Microsoft.Network/virtualNetworks/subnets/delegations'
-            }
-          ]
-          serviceENdpoints: [
-            {
-              service: 'Microsoft.Storage'
-            }
-          ]
-        }
-      }
-      {
-        name: 'sbConsumer'
-        properties: {
-          addressPrefix: sbConsumerFaAddressPrefix
-          routeTable: {
-            id: route.outputs.id
-          }
-          networkSecurityGroup: {
-            id: functionNsg.outputs.id
-          }
-          delegations: [
-            {
-              name: '${appPrefix}-asp-delegation-${substring(uniqueString(deployment().name), 0, 4)}'
-              properties: {
-                serviceName: 'Microsoft.Web/serverfarms'
-              }
-              type: 'Microsoft.Network/virtualNetworks/subnets/delegations'
-            }
-          ]
-          serviceENdpoints: [
-            {
-              service: 'Microsoft.Storage'
-            }
-          ]
-        }
-      }
     ]
   }
 }
 
-//TODO: This route table isn't quite right, but allows for communcation to app insights.  Using for now until we figure out how to route AI
-// traffic correctly through the firewall
+
 module route 'modules/udr.bicep' = {
   name: '${timeStamp}-udr'
   scope: resourceGroup(workloadNetworkRg.name)
@@ -204,24 +147,9 @@ module route 'modules/udr.bicep' = {
     location: region
     routes: [
       {
-        name: '${resourcePrefix}-egress'
+        name: 'default-egress'
         properties: {
           addressPrefix: '0.0.0.0/0'
-          nextHopType: 'Internet'
-        }
-      }
-      {
-        name: '${resourcePrefix}-hub'
-        properties: {
-          addressPrefix: '192.168.0.0/16'
-          nextHopType: 'VirtualAppliance'
-          nextHopIpAddress: bridgeAzFw.properties.ipConfigurations[0].properties.privateIPAddress
-        }
-      }
-      {
-        name: '${resourcePrefix}-island'
-        properties: {
-          addressPrefix: '10.0.0.0/8'
           nextHopType: 'VirtualAppliance'
           nextHopIpAddress: bridgeAzFw.properties.ipConfigurations[0].properties.privateIPAddress
         }
@@ -229,6 +157,70 @@ module route 'modules/udr.bicep' = {
     ]
   }
 }
+
+module spaRuntimeRoute 'modules/udr.bicep' = {
+  name: '${timeStamp}-spa-runtime-udr'
+  scope: resourceGroup(workloadNetworkRg.name)
+  params: {
+    name: '${resourcePrefix}-spa-runtime-udr'
+    location: region
+    routes: [
+      {
+        name: 'default-egress'
+        properties: {
+          addressPrefix: '0.0.0.0/0'
+          nextHopType: 'VirtualAppliance'
+          nextHopIpAddress: bridgeAzFw.properties.ipConfigurations[0].properties.privateIPAddress
+        }
+      }
+    ]
+  }
+}
+
+module spaAppRoute 'modules/udr.bicep' = {
+  name: '${timeStamp}-spa-app-udr'
+  scope: resourceGroup(workloadNetworkRg.name)
+  params: {
+    name: '${resourcePrefix}-spa-app-udr'
+    location: region
+    routes: [
+      {
+        name: 'default-egress'
+        properties: {
+          addressPrefix: '0.0.0.0/0'
+          nextHopType: 'VirtualAppliance'
+          nextHopIpAddress: bridgeAzFw.properties.ipConfigurations[0].properties.privateIPAddress
+        }
+      }
+    ]
+  }
+}
+
+// NSG for Spring Apps Runtime
+module runtimeNsg 'modules/nsg.bicep' = {
+  name: '${timeStamp}-spa-runtime-nsg'
+  scope: resourceGroup(workloadNetworkRg.name)
+  params: {
+    name: 'spa-runtime-nsg'
+    location: region
+    securityRules: [ ]
+  }
+}
+
+// NSG for Spring Boot Apps 
+module appNsg 'modules/nsg.bicep' = {
+  name: '${timeStamp}-spa-app-nsg'
+  scope: resourceGroup(workloadNetworkRg.name)
+  params: {
+    name: 'spa-app-nsg'
+    location: region
+    securityRules: [ ]
+  }
+}
+
+param bridgeBastionSubnetAddressSpace string = '10.10.16.128/25' // 123 addresses - 10.10.16.128 - 10.10.0.255
+param hubVnetAddressSpace string = '10.10.0.0/20'
+param spokeVnetAddressSpace string = '10.10.32.0/20'
 
 // NSG for Util subnet
 module utilNsg 'modules/nsg.bicep' = {
@@ -239,32 +231,37 @@ module utilNsg 'modules/nsg.bicep' = {
     location: region
     securityRules: [
       {
-        name: 'allow-remote-vm-connections'
+        name: 'allow-bastion'
         properties: {
           priority: 100
+          direction: 'Inbound'
           protocol: '*'
           access: 'Allow'
-          direction: 'Inbound'
-          sourceAddressPrefix: '*'
+          sourceAddressPrefix: bridgeBastionSubnetAddressSpace
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRanges: [
             '22'
             '3389'
-          ] 
+          ]
         }
       }
       {
-        name: 'deny-inbound-default'
+        name: 'allow-dns'
         properties: {
-          priority: 200
-          protocol: '*'
-          access: 'Deny'
+          priority: 110
           direction: 'Inbound'
-          sourceAddressPrefix: '*'
+          protocol: '*'
+          access: 'Allow'
+          sourceAddressPrefixes: [
+            hubVnetAddressSpace
+            spokeVnetAddressSpace
+          ]
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
-          destinationPortRange: '*'
+          destinationPortRanges: [
+            '53'
+          ]
         }
       }
     ]
@@ -292,18 +289,6 @@ module privateEndpointsNsg 'modules/nsg.bicep' = {
           destinationPortRange: '*'
         }
       }
-    ]
-  }
-}
-
-// NSG for EH Producer Integration subnet
-module functionNsg 'modules/nsg.bicep' = {
-  name: '${timeStamp}-nsg-functions'
-  scope: resourceGroup(workloadNetworkRg.name)
-  params: {
-    name: '${resourcePrefix}-workload-nsg-functions'
-    location: region
-    securityRules: [
     ]
   }
 }
@@ -398,29 +383,6 @@ module vnetAcrZoneLink 'modules/dnszonelink.bicep' = {
     vnetName: vnet.outputs.name
     vnetId: vnet.outputs.id
     zoneName: 'privatelink.azurecr.io'
-    autoRegistration: false
-  }
-}
-
-// Private DNS zone for Service Bus and Event Hubs
-module privateZoneServiceBus 'modules/dnsPrivateZone.bicep' = {
-  name: '${timeStamp}-dns-private-servicebus'
-  scope: resourceGroup(workloadDnsRg.name)
-  params: {
-    zoneName: 'privatelink.servicebus.windows.net'
-  }
-}
-
-module vnetServiceBusZoneLink 'modules/dnszonelink.bicep' = {
-  name: '${timeStamp}-dns-link-servicebus'
-  scope: resourceGroup(workloadDnsRg.name)
-  dependsOn: [
-    privateZoneServiceBus
-  ]
-  params: {
-    vnetName: vnet.outputs.name
-    vnetId: vnet.outputs.id
-    zoneName: 'privatelink.servicebus.windows.net'
     autoRegistration: false
   }
 }

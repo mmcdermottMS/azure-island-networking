@@ -1,26 +1,29 @@
-param accountName string
-param containerName string
-param tags object
-param location string = resourceGroup().location
+param defaultAction string = 'Allow' //Has to default to Allow initially to let the function apps deploy correctly, will be set to deny in a later step
+param location string
+@description('Use: Standard_LRS')
+param storageAccountName string
+param storageSkuName string
+param targetSubnetId string
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2019-06-01' = {
-  name: accountName
+resource storageAccount 'Microsoft.Storage/storageAccounts@2021-08-01' = {
+  name: storageAccountName
   location: location
   sku: {
-    name: 'Standard_LRS'
+    name: storageSkuName
   }
   kind: 'StorageV2'
   properties: {
-    supportsHttpsTrafficOnly: true
     accessTier: 'Hot'
+    networkAcls: {
+      bypass: 'AzureServices'
+      virtualNetworkRules: [
+        {
+          id: targetSubnetId
+          action: 'Allow'
+        }
+      ]
+      ipRules: []
+      defaultAction: defaultAction
+    }
   }
-  tags: tags
 }
-
-resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@2019-06-01' = {
-  name: '${storageAccount.name}/default/${containerName}'
-}
-
-output id string = storageAccount.id
-output name string = storageAccount.name
-output apiVersion string = storageAccount.apiVersion

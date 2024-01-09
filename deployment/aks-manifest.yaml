@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mrm-weather
+  name: mrm-weather
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mrm-weather
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: mrm-weather
+    spec:
+      containers:
+      - image: msftmicrosvcscusacr.azurecr.io/cdcgenericmicroserviceapi:latest
+        name: cdcgenericmicroserviceapi
+        ports:
+        - containerPort: 80
+        imagePullPolicy: Always
+        resources: 
+          requests:
+            cpu: 250m
+          limits:
+            cpu: 750m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mrm-weather
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    #service.beta.kubernetes.io/azure-load-balancer-ipv4: 192.168.64.4
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+  selector:
+    app: mrm-weather

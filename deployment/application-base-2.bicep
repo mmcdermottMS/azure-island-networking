@@ -69,14 +69,10 @@ resource bridgeAzFw 'Microsoft.Network/azureFirewalls@2022-05-01' existing = {
   scope: resourceGroup(coreNetworkRgName)
 }
 
-// ISLAND VNET IP SETTINGS
-param islandVnetAddressSpace string = '192.168.0.0/18'
-param utilSubnetAddressPrefix string = '192.168.0.0/22'         // 1019 addresses - 192.168.4.0 - 192.168.8.0
-param privateEndpointAddressPrefix string = '192.168.4.0/24'    // 251  addresses - 192.168.8.0 - 192.168.9.0
-param ehProducerFaAddressPrefix string = '192.168.5.0/26'       // 61   addresses - 192.168.9.0 - 192.168.9.63
-param ehConsumerFaAddressPrefix string = '192.168.5.64/26'      // 61   addresses - 192.168.9.64 - 192.168.9.127
-param sbConsumerFaAddressPrefix string = '192.168.5.128/26'     // 61   addresses - 192.168.9.128 - 192.168.9.192
-
+param islandVnetAddressSpace string = '192.168.128.0/18'
+param aksSubnetAddressPrefix string = '192.168.128.0/22'          // 1019 addresses - 192.168.0.0 - 192.168.4.0
+param utilSubnetAddressPrefix string = '192.168.132.0/22'         // 1019 addresses - 192.168.4.0 - 192.168.8.0
+param privateEndpointAddressPrefix string = '192.168.136.0/24'    // 251  addresses - 192.168.8.0 - 192.168.9.0
 
 module vnet 'modules/vnet.bicep' = {
   name: '${timeStamp}-vnet'
@@ -88,6 +84,18 @@ module vnet 'modules/vnet.bicep' = {
       islandVnetAddressSpace
     ]
     subnets: [
+      {
+        name: 'aks'
+        properties: {
+          addressPrefix: aksSubnetAddressPrefix
+          routeTable: {
+            id: route.outputs.id
+          }
+          networkSecurityGroup: {
+            id: aksIntegrationNsg.outputs.id
+          }
+        }
+      }
       {
         name: 'util'
         properties: {
@@ -110,84 +118,6 @@ module vnet 'modules/vnet.bicep' = {
           networkSecurityGroup: {
             id: privateEndpointsNsg.outputs.id
           }
-        }
-      }
-      {
-        name: 'ehProducer'
-        properties: {
-          addressPrefix: ehProducerFaAddressPrefix
-          routeTable: {
-            id: route.outputs.id
-          }
-          networkSecurityGroup: {
-            id: functionNsg.outputs.id
-          }
-          delegations: [
-            {
-              name: '${appPrefix}-asp-delegation-${substring(uniqueString(deployment().name), 0, 4)}'
-              properties: {
-                serviceName: 'Microsoft.Web/serverfarms'
-              }
-              type: 'Microsoft.Network/virtualNetworks/subnets/delegations'
-            }
-          ]
-          serviceENdpoints: [
-            {
-              service: 'Microsoft.Storage'
-            }
-          ]
-        }
-      }
-      {
-        name: 'ehConsumer'
-        properties: {
-          addressPrefix: ehConsumerFaAddressPrefix
-          routeTable: {
-            id: route.outputs.id
-          }
-          networkSecurityGroup: {
-            id: functionNsg.outputs.id
-          }
-          delegations: [
-            {
-              name: '${appPrefix}-asp-delegation-${substring(uniqueString(deployment().name), 0, 4)}'
-              properties: {
-                serviceName: 'Microsoft.Web/serverfarms'
-              }
-              type: 'Microsoft.Network/virtualNetworks/subnets/delegations'
-            }
-          ]
-          serviceENdpoints: [
-            {
-              service: 'Microsoft.Storage'
-            }
-          ]
-        }
-      }
-      {
-        name: 'sbConsumer'
-        properties: {
-          addressPrefix: sbConsumerFaAddressPrefix
-          routeTable: {
-            id: route.outputs.id
-          }
-          networkSecurityGroup: {
-            id: functionNsg.outputs.id
-          }
-          delegations: [
-            {
-              name: '${appPrefix}-asp-delegation-${substring(uniqueString(deployment().name), 0, 4)}'
-              properties: {
-                serviceName: 'Microsoft.Web/serverfarms'
-              }
-              type: 'Microsoft.Network/virtualNetworks/subnets/delegations'
-            }
-          ]
-          serviceENdpoints: [
-            {
-              service: 'Microsoft.Storage'
-            }
-          ]
         }
       }
     ]
@@ -230,6 +160,35 @@ module route 'modules/udr.bicep' = {
   }
 }
 
+// NSG for AKS subnet
+module aksIntegrationNsg 'modules/nsg.bicep' = {
+  name: '${timeStamp}-nsg-aks'
+  scope: resourceGroup(workloadNetworkRg.name)
+  params: {
+    name: '${resourcePrefix}-workload-nsg-aks'
+    location: region
+    securityRules: [
+      {
+        name: 'AllowAnyHTTPInbound'
+        properties: {
+          priority: 100
+          protocol: 'TCP'
+          access: 'Allow'
+          direction: 'Inbound'
+          sourceAddressPrefix: '*'
+          sourcePortRange: '*'
+          destinationAddressPrefix: '*'
+          destinationPortRange: '80'
+        }
+      }
+    ]
+  }
+}
+
+param bridgeBastionSubnetAddressSpace string = '10.10.16.128/25' // 123 addresses - 10.10.16.128 - 10.10.0.255
+param hubVnetAddressSpace string = '10.10.0.0/20'
+param spokeVnetAddressSpace string = '10.10.32.0/20'
+
 // NSG for Util subnet
 module utilNsg 'modules/nsg.bicep' = {
   name: '${timeStamp}-nsg-util'
@@ -239,32 +198,37 @@ module utilNsg 'modules/nsg.bicep' = {
     location: region
     securityRules: [
       {
-        name: 'allow-remote-vm-connections'
+        name: 'allow-bastion'
         properties: {
           priority: 100
+          direction: 'Inbound'
           protocol: '*'
           access: 'Allow'
-          direction: 'Inbound'
-          sourceAddressPrefix: '*'
+          sourceAddressPrefix: bridgeBastionSubnetAddressSpace
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRanges: [
             '22'
             '3389'
-          ] 
+          ]
         }
       }
       {
-        name: 'deny-inbound-default'
+        name: 'allow-dns'
         properties: {
-          priority: 200
-          protocol: '*'
-          access: 'Deny'
+          priority: 110
           direction: 'Inbound'
-          sourceAddressPrefix: '*'
+          protocol: '*'
+          access: 'Allow'
+          sourceAddressPrefixes: [
+            hubVnetAddressSpace
+            spokeVnetAddressSpace
+          ]
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
-          destinationPortRange: '*'
+          destinationPortRanges: [
+            '53'
+          ]
         }
       }
     ]
@@ -292,18 +256,6 @@ module privateEndpointsNsg 'modules/nsg.bicep' = {
           destinationPortRange: '*'
         }
       }
-    ]
-  }
-}
-
-// NSG for EH Producer Integration subnet
-module functionNsg 'modules/nsg.bicep' = {
-  name: '${timeStamp}-nsg-functions'
-  scope: resourceGroup(workloadNetworkRg.name)
-  params: {
-    name: '${resourcePrefix}-workload-nsg-functions'
-    location: region
-    securityRules: [
     ]
   }
 }
@@ -398,29 +350,6 @@ module vnetAcrZoneLink 'modules/dnszonelink.bicep' = {
     vnetName: vnet.outputs.name
     vnetId: vnet.outputs.id
     zoneName: 'privatelink.azurecr.io'
-    autoRegistration: false
-  }
-}
-
-// Private DNS zone for Service Bus and Event Hubs
-module privateZoneServiceBus 'modules/dnsPrivateZone.bicep' = {
-  name: '${timeStamp}-dns-private-servicebus'
-  scope: resourceGroup(workloadDnsRg.name)
-  params: {
-    zoneName: 'privatelink.servicebus.windows.net'
-  }
-}
-
-module vnetServiceBusZoneLink 'modules/dnszonelink.bicep' = {
-  name: '${timeStamp}-dns-link-servicebus'
-  scope: resourceGroup(workloadDnsRg.name)
-  dependsOn: [
-    privateZoneServiceBus
-  ]
-  params: {
-    vnetName: vnet.outputs.name
-    vnetId: vnet.outputs.id
-    zoneName: 'privatelink.servicebus.windows.net'
     autoRegistration: false
   }
 }

@@ -3,6 +3,7 @@ param location string
 param networkResourceGroupName string
 param dnsResourceGroupName string
 param resourcePrefix string
+param roleAssignmentDetails array = []
 param timeStamp string
 param vnetName string
 param zoneRedundant bool
@@ -28,8 +29,17 @@ resource eventHubs 'Microsoft.EventHub/namespaces/eventhubs@2021-11-01' = [for e
   }
 }]
 
+resource roleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for roleAssignment in roleAssignmentDetails: {
+  name: guid(eventHubNameSpace.id, roleAssignment.roleDefinitionId, resourceGroup().id)
+  properties: {
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', roleAssignment.roleDefinitionId)
+    principalId: roleAssignment.principalId
+  }
+  scope: eventHubNameSpace
+}]
+
 module privateEndpoint 'privateendpoint.bicep' = {
-  name: '${timeStamp}-${resourcePrefix}-pe-ehns'
+  name: '${timeStamp}-pe-ehns'
   scope: resourceGroup(networkResourceGroupName)
   params: {
     location: location

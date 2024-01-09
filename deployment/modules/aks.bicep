@@ -1,13 +1,18 @@
-param resourcePrefix string
-param location string
+//param acrPullMiName string
+//param keyVaultUserMiName string
+param fullPrefix string
 param linuxAdminUsername string = 'adminUser'
+param location string
+param networkContributorMiName string
+//param privateLinkServiceIp string
+param resourcePrefix string
 param subnetId string
+param tags object
 param keyData string
 
 
-resource mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: 'aksMi'
-  location: location
+resource networkContributorMi 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
+  name: networkContributorMiName
 }
 
 
@@ -17,25 +22,24 @@ resource aks 'Microsoft.ContainerService/managedClusters@2023-09-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${mi.id}': {}
+      '${networkContributorMi.id}': {
+      }
     }
   }
   properties: {
     dnsPrefix: '${resourcePrefix}-aks-dns'
     agentPoolProfiles: [
       {
-        name: 'agentpool'
-        count: 1
+        name: 'agentpool1'
+        count: 2
         vmSize: 'Standard_B4ms'
         osDiskSizeGB: 128
         osDiskType: 'Managed'
         vnetSubnetID: subnetId
-        maxCount: 5
-        minCount: 1
-        enableAutoScaling: true
         enableNodePublicIP: false
-        mode: 'System'       
+        mode: 'System'
         osType: 'Linux'
+        osSKU: 'Ubuntu'
       }
     ]
     networkProfile: {
@@ -44,7 +48,7 @@ resource aks 'Microsoft.ContainerService/managedClusters@2023-09-01' = {
       networkDataplane: 'azure'
       networkPolicy: 'azure'
     }
-    nodeResourceGroup: '${resourcePrefix}-aks-node'
+    nodeResourceGroup: '${fullPrefix}-workload-aks-node'
     linuxProfile: {
       adminUsername: linuxAdminUsername
       ssh: {
@@ -56,4 +60,41 @@ resource aks 'Microsoft.ContainerService/managedClusters@2023-09-01' = {
       }
     }
   }
+  sku: {
+    name: 'Basic'
+    tier: 'Free'
+  }
+  tags: tags
 }
+
+/*
+resource privateLinkService 'Microsoft.Network/privateLinkServices@2022-07-01' = {
+  name: '${resourcePrefix}-pls-aks'
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: 'aks-1'
+        properties: {
+          privateIPAllocationMethod: 'Static'
+          privateIPAddress: privateLinkServiceIp//''
+          subnet: {
+            id: subnetId
+          }
+        }
+      }
+    ]
+    visibility: {
+      subscriptions: [
+        subscription().id
+      ]
+    }
+    autoApproval: {
+      subscriptions: [
+        subscription().id
+      ]
+    }
+  }
+  tags: tags
+}
+*/
